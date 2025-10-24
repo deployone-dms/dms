@@ -1077,10 +1077,6 @@ if ($studentsTableExists) {
                                         <i class="fas fa-users"></i>
                                         <h3>No Students Found</h3>
                                         <p>There are no enrolled students yet. Start by adding a new student.</p>
-                                        <a href="add_child.php" class="add-student-btn">
-                                            <i class="fas fa-plus"></i>
-                                            Add First Student
-                                        </a>
                                     </div>
                                 </td>
                             </tr>
@@ -1260,10 +1256,6 @@ if ($studentsTableExists) {
                         <i class="fas fa-users"></i>
                         <h3>No Students Found</h3>
                         <p>There are no enrolled students yet. Start by adding a new student.</p>
-                        <a href="add_child.php" class="add-student-btn">
-                            <i class="fas fa-plus"></i>
-                            Add First Student
-                        </a>
                     `;
                 }
             }
