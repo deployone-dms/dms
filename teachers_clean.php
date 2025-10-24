@@ -458,12 +458,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </a>
                 </div>
                 
-                <div class="nav-item">
-                    <a href="#">
-                        <i class="fas fa-file-alt"></i>
-                        Reports
-                    </a>
-                </div>
             </nav>
         </div>
 

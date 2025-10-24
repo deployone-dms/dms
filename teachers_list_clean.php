@@ -590,7 +590,7 @@ function deriveCityCode($address) {
                 </div>
                 
                 <div class="nav-item">
-                    <a href="index.php">
+                    <a href="admin_dashboard.php">
                         <i class="fas fa-users"></i>
                         Enrollees List
                     </a>
@@ -614,12 +614,6 @@ function deriveCityCode($address) {
                     </a>
                 </div>
                 
-                <div class="nav-item">
-                    <a href="#">
-                        <i class="fas fa-file-alt"></i>
-                        Reports
-                    </a>
-                </div>
             </nav>
         </div>
 

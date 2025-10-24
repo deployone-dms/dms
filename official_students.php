@@ -110,12 +110,6 @@ $result = $conn->query("SELECT * FROM students WHERE status='ACCEPTED' ORDER BY 
                         Teachers List
                     </a>
                 </div>
-                <div class="nav-item">
-                    <a href="#">
-                        <i class="fas fa-file-alt"></i>
-                        Reports
-                    </a>
-                </div>
             </nav>
         </div>
         <div class="main-content" id="main-content">
