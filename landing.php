@@ -84,17 +84,17 @@ if (isset($_SESSION['otp'])) {
             unset($_SESSION['fresh_logout'], $_SESSION['logout_timestamp'], $_SESSION['secure_logout']);
             
             switch($db_acc_type) {
-                case '1':
-                    header("Location: dashboard.php");
+                case '1': // Admin
+                    header("Location: index.php");
                     break;
-                case '2':
-                    header("Location: dashboard2.php");
+                case '2': // User/Parent
+                    header("Location: parent_dashboard.php");
                     break;
-                case '3':
-                    header("Location: supervisor/dashboard.php");
+                case '3': // Supervisor
+                    header("Location: index.php");
                     break;
-                case '4':
-                    header("Location: staff/dashboard.php");
+                case '4': // Staff/Teacher
+                    header("Location: index2.php");
                     break;
             }
             exit;
