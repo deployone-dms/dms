@@ -23,7 +23,7 @@ $emailErr = $passwordErr = $otpErr = "";
 if (isset($_GET['clear_otp'])) {
     unset($_SESSION['otp'], $_SESSION['email'], $_SESSION['account_type']);
     // Remove the redirect to prevent loop
-    echo "<script>window.location.href = 'landing.php';</script>";
+    echo "<script>window.location.href = 'index.php';</script>";
     exit;
 }
 
@@ -335,7 +335,7 @@ if (isset($_SESSION['otp'])) {
                         </div>
                         <p style="color: #666; font-size: 14px;">Enter the 6-digit code sent to your email</p>
                     </div>
-                    <form method="post" action="landing.php">
+                    <form method="post" action="index.php">
                         <div class="field">
                             <label for="otp">OTP Code</label>
                             <input class="input" type="text" id="otp" name="otp" placeholder="123456" maxlength="6" style="text-align: center; font-size: 18px; letter-spacing: 3px;" required>
@@ -350,7 +350,7 @@ if (isset($_SESSION['otp'])) {
                     </form>
                 <?php else: ?>
                     <!-- Regular Login Form -->
-                    <form method="post" action="landing.php">
+                    <form method="post" action="index.php">
                         <div class="field">
                             <label for="email">Email</label>
                             <input class="input" type="email" id="email" name="email" placeholder="you@example.com" value="<?php echo htmlspecialchars($email); ?>" required>
@@ -735,7 +735,7 @@ if (isset($_SESSION['otp'])) {
         console.log('History length:', history.length);
         
         // Add loading indicator for login form
-        const loginForm = document.querySelector('form[action="landing.php"]');
+        const loginForm = document.querySelector('form[action="index.php"]');
         if (loginForm) {
             loginForm.addEventListener('submit', function() {
                 const loginBtn = document.getElementById('loginBtn');

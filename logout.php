@@ -30,7 +30,7 @@ $_SESSION['logout_time'] = time();
 $_SESSION['logout_flag'] = true;
 
 // Redirect to landing page with cache-busting parameter and force reload
-header('Location: landing.php?logout=' . time() . '&v=' . rand(1000, 9999) . '&secure=1');
+header('Location: index.php?logout=' . time() . '&v=' . rand(1000, 9999) . '&secure=1');
 exit;
 ?>
 
