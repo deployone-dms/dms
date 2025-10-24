@@ -1,6 +1,6 @@
 # Sensitive files - DO NOT COMMIT
 connection.php
-db.php
+# db.php - needed for Railway deployment
 
 # Uploaded files
 uploads/
