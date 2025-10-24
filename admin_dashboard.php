@@ -975,19 +975,21 @@ if ($studentsTableExists) {
                                     ?>
                                     <img src="<?php echo $pic_src; ?>" class="avatar" alt="Student Photo">
                                 </td>
-                                <td><?php echo htmlspecialchars($row['last_name']); ?></td>
-                                <td><?php echo htmlspecialchars($row['first_name']); ?></td>
-                                <td><?php echo htmlspecialchars($row['middle_initial']); ?></td>
+                                <td><?php echo htmlspecialchars($row['last_name'] ?? ''); ?></td>
+                                <td><?php echo htmlspecialchars($row['first_name'] ?? ''); ?></td>
+                                <td><?php echo htmlspecialchars($row['middle_initial'] ?? ''); ?></td>
                                 <td><?php echo date('M d, Y', strtotime($row['birth_date'])); ?></td>
                                 <td><?php echo $row['age']; ?> years old</td>
                                 <td>
                                     <span style="display: inline-flex; align-items: center; gap: 5px;">
-                                        <?php if($row['sex'] == 'Male'): ?>
+                                        <?php 
+                                        $sex = $row['sex'] ?? $row['gender'] ?? 'Unknown';
+                                        if($sex == 'Male'): ?>
                                             <i class="fas fa-male" style="color: #007BFF;"></i>
                                         <?php else: ?>
                                             <i class="fas fa-female" style="color: #E83E8C;"></i>
                                         <?php endif; ?>
-                                        <?php echo $row['sex']; ?>
+                                        <?php echo $sex; ?>
                                     </span>
                                 </td>
                                 
@@ -995,14 +997,26 @@ if ($studentsTableExists) {
                                     <div class="action-buttons">
                                         <?php 
                                         $gmTotals = ['t1' => 0, 't2' => 0, 't3' => 0];
-                                        $gm = $conn->query("SELECT payload FROM grossmotor_submissions WHERE student_id = " . intval($row['id']) . " ORDER BY created_at DESC LIMIT 1");
-                                        if ($gm && ($gmRow = $gm->fetch_assoc())) {
-                                            $data = json_decode($gmRow['payload'], true);
-                                            if (is_array($data)) {
-                                                foreach ($data as $item) {
-                                                    $gmTotals['t1'] += isset($item['eval1']) && is_numeric($item['eval1']) ? (int)$item['eval1'] : 0;
-                                                    $gmTotals['t2'] += isset($item['eval2']) && is_numeric($item['eval2']) ? (int)$item['eval2'] : 0;
-                                                    $gmTotals['t3'] += isset($item['eval3']) && is_numeric($item['eval3']) ? (int)$item['eval3'] : 0;
+                                        
+                                        // Check if grossmotor_submissions table exists and has payload column
+                                        $tableExists = $conn->query("SHOW TABLES LIKE 'grossmotor_submissions'");
+                                        $hasPayloadColumn = false;
+                                        
+                                        if ($tableExists && $tableExists->num_rows > 0) {
+                                            $columnCheck = $conn->query("SHOW COLUMNS FROM grossmotor_submissions LIKE 'payload'");
+                                            $hasPayloadColumn = $columnCheck && $columnCheck->num_rows > 0;
+                                        }
+                                        
+                                        if ($hasPayloadColumn) {
+                                            $gm = $conn->query("SELECT payload FROM grossmotor_submissions WHERE student_id = " . intval($row['id']) . " ORDER BY created_at DESC LIMIT 1");
+                                            if ($gm && ($gmRow = $gm->fetch_assoc())) {
+                                                $data = json_decode($gmRow['payload'], true);
+                                                if (is_array($data)) {
+                                                    foreach ($data as $item) {
+                                                        $gmTotals['t1'] += isset($item['eval1']) && is_numeric($item['eval1']) ? (int)$item['eval1'] : 0;
+                                                        $gmTotals['t2'] += isset($item['eval2']) && is_numeric($item['eval2']) ? (int)$item['eval2'] : 0;
+                                                        $gmTotals['t3'] += isset($item['eval3']) && is_numeric($item['eval3']) ? (int)$item['eval3'] : 0;
+                                                    }
                                                 }
                                             }
                                         }
