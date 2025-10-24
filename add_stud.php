@@ -71,37 +71,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
     $four_ps_id = isset($savedFiles['four_ps_id']) ? $savedFiles['four_ps_id'] : null;
     $pwd_id = isset($savedFiles['pwd_id']) ? $savedFiles['pwd_id'] : null;
     
-    // Insert into database
-    $stmt = $conn->prepare("INSERT INTO students (last_name, first_name, middle_initial, birth_date, age, sex, birth_city, birth_province, house_no, street_name, area, village, barangay, city, mother_name, mother_contact, father_name, father_contact, picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    // Check if the table has the 'sex' column, otherwise use 'gender'
+    $checkColumn = $conn->query("SHOW COLUMNS FROM students LIKE 'sex'");
+    $hasSexColumn = $checkColumn && $checkColumn->num_rows > 0;
     
-if ($stmt) {
-        $stmt->bind_param("ssssissssssssssssssssssss", $last_name, $first_name, $middle_initial, $birth_date, $age, $sex, $birth_city, $birth_province, $house_no, $street_name, $area, $village, $barangay, $city, $mother_name, $mother_contact, $father_name, $father_contact, $picture, $psa_birth_certificate, $immunization_card, $qc_parent_id, $solo_parent_id, $four_ps_id, $pwd_id);
+    if ($hasSexColumn) {
+        // Use the old schema with 'sex' column
+        $stmt = $conn->prepare("INSERT INTO students (last_name, first_name, middle_initial, birth_date, age, sex, birth_city, birth_province, house_no, street_name, area, village, barangay, city, mother_name, mother_contact, father_name, father_contact, picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
-        if ($stmt->execute()) {
-            $stmt->close();
-            if (isset($_GET['embed']) && $_GET['embed'] == '1') {
-                echo "<div style='padding:30px; font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif; text-align:center;'>";
-                echo "<div style='display:inline-block; background:#F8FFF3; border:1px solid #C3E6CB; color:#155724; padding:16px 20px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.06);'>";
-                echo "<div style='font-size:18px; font-weight:700; margin-bottom:6px;'>Application submitted</div>";
-                echo "<div style='font-size:15px;'>Thank you. Please wait for the school to review and accept your application.</div>";
-                echo "</div>";
-                echo "</div>";
-                exit;
-            } else {
-                header("Location: index.php?success=student_added");
-                exit;
-            }
-        } else {
-            echo "<div style='background: #f8d7da; padding: 15px; margin: 10px; border-radius: 5px; border: 1px solid #f5c6cb;'>";
-            echo "<strong>❌ DATABASE INSERT FAILED!</strong><br>";
-            echo "Error: " . $stmt->error . "<br>";
-            echo "</div>";
+        if ($stmt) {
+            $stmt->bind_param("ssssissssssssssssssssssss", $last_name, $first_name, $middle_initial, $birth_date, $age, $sex, $birth_city, $birth_province, $house_no, $street_name, $area, $village, $barangay, $city, $mother_name, $mother_contact, $father_name, $father_contact, $picture, $psa_birth_certificate, $immunization_card, $qc_parent_id, $solo_parent_id, $four_ps_id, $pwd_id);
         }
+    } else {
+        // Use the new schema without 'sex' column - insert into a simplified structure
+        $stmt = $conn->prepare("INSERT INTO students (first_name, last_name, middle_name, birth_date, age, parent_name, parent_phone, parent_email, address, enrollment_date, status, picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        
+        if ($stmt) {
+            $parent_name = $mother_name ?: $father_name ?: 'N/A';
+            $parent_phone = $mother_contact ?: $father_contact ?: '';
+            $parent_email = '';
+            $address = $house_no . ' ' . $street_name . ', ' . $area . ', ' . $village . ', ' . $barangay . ', ' . $city;
+            $enrollment_date = date('Y-m-d');
+            $status = 'PENDING';
+            
+            $stmt->bind_param("ssssssssssssssssss", $first_name, $last_name, $middle_initial, $birth_date, $age, $parent_name, $parent_phone, $parent_email, $address, $enrollment_date, $status, $picture, $psa_birth_certificate, $immunization_card, $qc_parent_id, $solo_parent_id, $four_ps_id, $pwd_id);
+        }
+    }
+    
+    if ($stmt && $stmt->execute()) {
         $stmt->close();
+        if (isset($_GET['embed']) && $_GET['embed'] == '1') {
+            echo "<div style='padding:30px; font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif; text-align:center;'>";
+            echo "<div style='display:inline-block; background:#F8FFF3; border:1px solid #C3E6CB; color:#155724; padding:16px 20px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.06);'>";
+            echo "<div style='font-size:18px; font-weight:700; margin-bottom:6px;'>Application submitted</div>";
+            echo "<div style='font-size:15px;'>Thank you. Please wait for the school to review and accept your application.</div>";
+            echo "</div>";
+            echo "</div>";
+            exit;
+        } else {
+            header("Location: index.php?success=student_added");
+            exit;
+        }
     } else {
         echo "<div style='background: #f8d7da; padding: 15px; margin: 10px; border-radius: 5px; border: 1px solid #f5c6cb;'>";
-        echo "<strong>❌ PREPARE STATEMENT FAILED!</strong><br>";
-        echo "Error: " . $conn->error . "<br>";
+        echo "<strong>❌ DATABASE INSERT FAILED!</strong><br>";
+        echo "Error: " . ($stmt ? $stmt->error : $conn->error) . "<br>";
         echo "</div>";
     }
 }
