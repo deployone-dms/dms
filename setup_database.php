@@ -142,28 +142,28 @@
           UNIQUE KEY `email` (`email`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
         
-        if ($Connection->query($sql_login) === TRUE) {
+        if ($conn->query($sql_login) === TRUE) {
             echo "<div class='success'><span class='icon'>✅</span> Table 'login_table' created successfully!</div>";
             $success[] = "login_table created";
             
             // Check if default admin exists
-            $check = $Connection->query("SELECT * FROM login_table WHERE email = 'admin@yakapdaycare.com'");
+            $check = $conn->query("SELECT * FROM login_table WHERE email = 'admin@yakapdaycare.com'");
             if ($check->num_rows == 0) {
                 $insert = "INSERT INTO `login_table` (`email`, `password`, `account_type`) VALUES
                 ('admin@yakapdaycare.com', 'admin123', 1)";
                 
-                if ($Connection->query($insert) === TRUE) {
+                if ($conn->query($insert) === TRUE) {
                     echo "<div class='success'><span class='icon'>✅</span> Default admin account created!</div>";
                     $success[] = "admin account created";
                 } else {
-                    echo "<div class='error'><span class='icon'>❌</span> Error creating admin: " . $Connection->error . "</div>";
+                    echo "<div class='error'><span class='icon'>❌</span> Error creating admin: " . $conn->error . "</div>";
                     $errors[] = "admin account creation failed";
                 }
             } else {
                 echo "<div class='info'><span class='icon'>ℹ️</span> Admin account already exists.</div>";
             }
         } else {
-            echo "<div class='error'><span class='icon'>❌</span> Error creating login_table: " . $Connection->error . "</div>";
+            echo "<div class='error'><span class='icon'>❌</span> Error creating login_table: " . $conn->error . "</div>";
             $errors[] = "login_table creation failed";
         }
         
@@ -205,11 +205,11 @@
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
         
-        if ($Connection->query($sql_students) === TRUE) {
+        if ($conn->query($sql_students) === TRUE) {
             echo "<div class='success'><span class='icon'>✅</span> Table 'students' created successfully!</div>";
             $success[] = "students table created";
         } else {
-            echo "<div class='error'><span class='icon'>❌</span> Error creating students table: " . $Connection->error . "</div>";
+            echo "<div class='error'><span class='icon'>❌</span> Error creating students table: " . $conn->error . "</div>";
             $errors[] = "students table creation failed";
         }
         
@@ -226,11 +226,11 @@
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         
-        if ($Connection->query($sql_parents) === TRUE) {
+        if ($conn->query($sql_parents) === TRUE) {
             echo "<div class='success'><span class='icon'>✅</span> Table 'parents' created successfully!</div>";
             $success[] = "parents table created";
         } else {
-            echo "<div class='error'><span class='icon'>❌</span> Error creating parents table: " . $Connection->error . "</div>";
+            echo "<div class='error'><span class='icon'>❌</span> Error creating parents table: " . $conn->error . "</div>";
             $errors[] = "parents table creation failed";
         }
         

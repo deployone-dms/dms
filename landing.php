@@ -131,7 +131,7 @@ if (isset($_SESSION['otp'])) {
     }
 
     if ($password && $email) {
-        $check_email = mysqli_query($Connection, "SELECT * FROM login_table WHERE email = '".mysqli_real_escape_string($Connection, $email)."'");
+        $check_email = mysqli_query($conn, "SELECT * FROM login_table WHERE email = '".mysqli_real_escape_string($conn, $email)."'");
         $check_email_row = mysqli_num_rows($check_email);
         if ($check_email_row > 0) {
             $row = mysqli_fetch_assoc($check_email);
