@@ -8,7 +8,7 @@ class EmailService {
     
     public function __construct() {
         $this->apiKey = getenv('BREVO_API_KEY') ?: '';
-        $this->fromEmail = getenv('FROM_EMAIL') ?: 'jheyjheypogi30@gmail.com';
+        $this->fromEmail = getenv('FROM_EMAIL') ?: 'deployone73@gmail.com';
         $this->fromName = getenv('FROM_NAME') ?: 'Yakap Daycare Center';
     }
     

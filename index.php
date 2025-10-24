@@ -13,10 +13,8 @@ if (!isset($_SESSION['user_logged_in']) || $_SESSION['user_logged_in'] !== true)
     unset($_SESSION['user_logged_in'], $_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_name']);
 }
 
-// PHPMailer manual include (adjust path if needed)
-require 'vendor/autoload.php';
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+// Include email service
+require_once 'email_service.php';
 
 $email = $password = $otp = "";
 $emailErr = $passwordErr = $otpErr = "";
@@ -128,35 +126,12 @@ if (isset($_SESSION['otp'])) {
                 $_SESSION['email'] = $email;
                 $_SESSION['account_type'] = $row["account_type"];
 
-                // Send OTP using PHPMailer with timeout
-                $mail = new PHPMailer(true);
-                try {
-                    $mail->isSMTP();
-                    $mail->Host       = 'smtp.gmail.com';
-                    $mail->SMTPAuth   = true;
-                    $mail->Username   = 'jheyjheypogi30@gmail.com';
-                    $mail->Password   = 'rudolvpyhkjasvqn';
-                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                    $mail->Port       = 587;
-                    $mail->Timeout    = 10; // 10 second timeout
-                    $mail->SMTPKeepAlive = true;
-
-                    $mail->setFrom('jheyjheypogi30@gmail.com', 'Yakap Daycare Center');
-                    $mail->addAddress($email);
-                    $mail->isHTML(true);
-                    $mail->Subject = 'Your OTP Code - Yakap Daycare Center';
-                    
-                    // Simplified email template for faster sending
-                    $mail->Body = "
-                    <h2>🔐 OTP Verification</h2>
-                    <p>Your OTP code is: <strong style='font-size: 24px; color: #1B5E20;'>$otp</strong></p>
-                    <p>This code is valid for 5 minutes only.</p>
-                    <p>Do not share this code with anyone.</p>
-                    ";
-
-                    $mail->send();
-                } catch (Exception $e) {
-                    $otpErr = "OTP could not be sent. Mailer Error: {$mail->ErrorInfo}";
+                // Send OTP using Brevo email service
+                $emailService = new EmailService();
+                $result = $emailService->sendOTP($email, $otp);
+                
+                if (!$result['success']) {
+                    $otpErr = $result['message'];
                 }
                 // Show OTP form after sending - no redirect needed
                 // The form will be shown below
