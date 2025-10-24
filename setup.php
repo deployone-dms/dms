@@ -102,9 +102,15 @@
         
         <hr>
         <h3>Environment Information</h3>
-        <p><strong>Database Host:</strong> <?php echo getenv('DB_HOST') ?: getenv('MYSQL_HOST') ?: 'Not set'; ?></p>
-        <p><strong>Database Name:</strong> <?php echo getenv('DB_DATABASE') ?: getenv('MYSQL_DATABASE') ?: 'Not set'; ?></p>
+        <p><strong>Database Host:</strong> <?php echo getenv('MYSQL_HOST') ?: getenv('DB_HOST') ?: 'Not set'; ?></p>
+        <p><strong>Database Name:</strong> <?php echo getenv('MYSQL_DATABASE') ?: getenv('DB_DATABASE') ?: 'Not set'; ?></p>
+        <p><strong>Database User:</strong> <?php echo getenv('MYSQL_USER') ?: getenv('DB_USERNAME') ?: 'Not set'; ?></p>
         <p><strong>Database URL:</strong> <?php echo getenv('DATABASE_URL') ? 'Set' : 'Not set'; ?></p>
+        <p><strong>All MySQL Vars:</strong> <?php 
+            $mysql_vars = ['MYSQL_HOST', 'MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_DATABASE', 'MYSQL_PORT'];
+            $set_vars = array_filter($mysql_vars, function($var) { return getenv($var); });
+            echo count($set_vars) . ' of ' . count($mysql_vars) . ' MySQL variables set';
+        ?></p>
     </div>
 </body>
 </html>

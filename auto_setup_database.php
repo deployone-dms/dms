@@ -3,24 +3,24 @@
 // This script will run automatically to set up your database
 
 function setupDatabase() {
-    // Get database connection details from environment variables
-    $database_url = getenv('DATABASE_URL');
+    // Check for Railway's MySQL environment variables
+    $host = getenv('MYSQL_HOST') ?: getenv('DB_HOST') ?: 'localhost';
+    $username = getenv('MYSQL_USER') ?: getenv('DB_USERNAME') ?: 'root';
+    $password = getenv('MYSQL_PASSWORD') ?: getenv('DB_PASSWORD') ?: '';
+    $database = getenv('MYSQL_DATABASE') ?: getenv('DB_DATABASE') ?: 'daycare_db';
+    $port = getenv('MYSQL_PORT') ?: getenv('DB_PORT') ?: 3306;
     
-    if (!$database_url) {
-        // Fallback to individual environment variables
-        $host = getenv('DB_HOST') ?: 'localhost';
-        $username = getenv('DB_USERNAME') ?: 'root';
-        $password = getenv('DB_PASSWORD') ?: '';
-        $database = getenv('DB_DATABASE') ?: 'daycare_db';
-        $port = getenv('DB_PORT') ?: 3306;
-    } else {
-        // Parse DATABASE_URL (Railway format)
+    // Try DATABASE_URL if individual variables are not set
+    $database_url = getenv('DATABASE_URL');
+    if ($database_url && ($host === 'localhost' || $username === 'root')) {
         $url = parse_url($database_url);
-        $host = $url['host'];
-        $username = $url['user'];
-        $password = $url['pass'];
-        $database = ltrim($url['path'], '/');
-        $port = isset($url['port']) ? $url['port'] : 3306;
+        if ($url && isset($url['host'])) {
+            $host = $url['host'];
+            $username = $url['user'] ?? 'root';
+            $password = $url['pass'] ?? '';
+            $database = ltrim($url['path'] ?? '/daycare_db', '/');
+            $port = isset($url['port']) ? $url['port'] : 3306;
+        }
     }
     
     try {
