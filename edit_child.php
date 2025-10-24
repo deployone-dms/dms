@@ -448,7 +448,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <nav>
                 <ul>
                     <li><a href="add_child.php">Enrollment</a></li>
-                    <li><a href="index.php" class="active">Students</a></li>
+                    <li><a href="admin_dashboard.php" class="active">Students</a></li>
                     <li><a href="progress.php">Progress</a></li>
                     <li><a href="teachers list.php">Teachers</a></li>
                     <li><a href="attendance.php">Attendance</a></li>
@@ -534,7 +534,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 
                 <!-- Button row with both buttons aligned horizontally -->
                 <div class="button-row">
-                    <a href="index.php">Back to List</a>
+                    <a href="admin_dashboard.php">Back to List</a>
                     <input type="submit" value="Update Student" form="main-form">
                 </div>
             </div>

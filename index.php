@@ -1,1504 +1,795 @@
 <?php
-// Auto-setup database on first load
-include 'auto_setup_database.php';
-setupDatabase();
+session_start();
+include("db.php");
 
-include 'db.php';
-// Lightweight JSON endpoint to fetch a student's document file paths
-if (isset($_GET['fetch_docs']) && isset($_GET['id'])) {
-    header('Content-Type: application/json');
-    $id = intval($_GET['id']);
-    $payload = new stdClass();
-    if ($id > 0) {
-        $stmt = $conn->prepare("SELECT picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id FROM students WHERE id = ? LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param('i', $id);
-            if ($stmt->execute()) {
-                $res = $stmt->get_result();
-                if ($res && ($row = $res->fetch_assoc())) {
-                    $payload = [
-                        'picture' => $row['picture'] ?? null,
-                        'psa_birth_certificate' => $row['psa_birth_certificate'] ?? null,
-                        'immunization_card' => $row['immunization_card'] ?? null,
-                        'qc_parent_id' => $row['qc_parent_id'] ?? null,
-                        'solo_parent_id' => $row['solo_parent_id'] ?? null,
-                        'four_ps_id' => $row['four_ps_id'] ?? null,
-                        'pwd_id' => $row['pwd_id'] ?? null
-                    ];
-                }
-            }
-            $stmt->close();
-        }
-    }
-    echo json_encode($payload);
+// Security headers to prevent caching
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
+// Simplified session management - avoid constant session destruction
+if (!isset($_SESSION['user_logged_in']) || $_SESSION['user_logged_in'] !== true) {
+    // Only clear specific session variables, not the entire session
+    unset($_SESSION['user_logged_in'], $_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_name']);
+}
+
+// PHPMailer manual include (adjust path if needed)
+require 'vendor/autoload.php';
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+$email = $password = $otp = "";
+$emailErr = $passwordErr = $otpErr = "";
+
+// Handle OTP session clearing
+if (isset($_GET['clear_otp'])) {
+    unset($_SESSION['otp'], $_SESSION['email'], $_SESSION['account_type']);
+    // Remove the redirect to prevent loop
+    echo "<script>window.location.href = 'landing.php';</script>";
     exit;
 }
-// Ensure dynamic columns only when students table exists
-if ($tableCheck = $conn->query("SHOW TABLES LIKE 'students'")) {
-    if ($tableCheck->num_rows > 0) {
-        // Check if status column exists before adding
-        $statusCheck = $conn->query("SHOW COLUMNS FROM students LIKE 'status'");
-        if ($statusCheck->num_rows == 0) {
-            $conn->query("ALTER TABLE students ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
-        }
-        
-        // Check if archived column exists before adding
-        $archivedCheck = $conn->query("SHOW COLUMNS FROM students LIKE 'archived'");
-        if ($archivedCheck->num_rows == 0) {
-            $conn->query("ALTER TABLE students ADD COLUMN archived TINYINT(1) NOT NULL DEFAULT 0");
-        }
-    }
-    $tableCheck->free();
+
+// Handle secure logout clearing
+if (isset($_GET['clear_secure_logout'])) {
+    unset($_SESSION['secure_logout'], $_SESSION['secure_logout_time']);
+    exit;
 }
 
-// Handle Accept/Reject/Archive/Restore inline via POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'])) {
-    $id = intval($_POST['id']);
-    $action = $_POST['action'];
-    if ($id > 0 && in_array($action, ['ACCEPT', 'REJECT', 'ARCHIVE', 'RESTORE'])) {
-        if ($action === 'ACCEPT') {
-            $stmt = $conn->prepare("UPDATE students SET status='ACCEPTED' WHERE id=?");
-            if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close(); }
-            header('Location: index.php?success=student_accepted');
-            exit;
-        } else if ($action === 'REJECT') {
-            $stmt = $conn->prepare("UPDATE students SET status='REJECTED' WHERE id=?");
-            if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close(); }
-            header('Location: index.php?success=student_rejected');
-            exit;
-        } else if ($action === 'ARCHIVE') {
-            $stmt = $conn->prepare("UPDATE students SET archived=1 WHERE id=?");
-            if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close(); }
-            header('Location: index.php?success=student_archived');
-            exit;
-        } else if ($action === 'RESTORE') {
-            $stmt = $conn->prepare("UPDATE students SET archived=0 WHERE id=?");
-            if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close(); }
-            header('Location: index.php?view=archived&success=student_restored');
-            exit;
-        }
+// Handle logout messages and security checks
+$logout_message = "";
+
+// Check if this is a fresh logout
+if (isset($_GET['logout'])) {
+    $logout_message = "You have been successfully logged out.";
+    // Set a flag to prevent back navigation
+    $_SESSION['fresh_logout'] = true;
+    $_SESSION['logout_timestamp'] = time();
+    
+    // If this is a secure logout from dashboard, add extra security
+    if (isset($_GET['secure'])) {
+        $_SESSION['secure_logout'] = true;
+        $_SESSION['secure_logout_time'] = time();
+    }
+} elseif (isset($_GET['timeout'])) {
+    $logout_message = "Your session has expired. Please login again.";
+} elseif (isset($_GET['unauthorized'])) {
+    $logout_message = "Access denied. Please login to continue.";
+} elseif (isset($_GET['blocked'])) {
+    $logout_message = "Too many login attempts. Please try again later.";
+}
+
+// Additional security: Check if user is trying to access after logout
+if (isset($_SESSION['fresh_logout']) && (time() - $_SESSION['logout_timestamp']) < 300) {
+    // Within 5 minutes of logout, show warning
+    if (!isset($_GET['logout'])) {
+        $logout_message = "You have been logged out. Please login again to continue.";
     }
 }
 
-// Check if viewing archived students
-$viewArchived = isset($_GET['view']) && $_GET['view'] === 'archived';
-$result = false;
-$studentsTableExists = false;
-if ($tableCheck = $conn->query("SHOW TABLES LIKE 'students'")) {
-    $studentsTableExists = $tableCheck->num_rows > 0;
-    $tableCheck->free();
-}
+// OTP Verification
+if (isset($_SESSION['otp'])) {
+    if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['otp'])) {
+        $otp = $_POST['otp'];
+        if (empty($otp)) {
+            $otpErr = "OTP is required";
+        } elseif ($otp == $_SESSION['otp']) {
+            // OTP correct, login successful
+            $db_acc_type = $_SESSION['account_type'];
+            unset($_SESSION['otp'], $_SESSION['email'], $_SESSION['account_type']);
+            
+            // Set proper session flag for security
+            $_SESSION['user_logged_in'] = true;
+            $_SESSION['login_time'] = time();
+            // Clear recent logout flags so guards don't bounce an authenticated user
+            unset($_SESSION['fresh_logout'], $_SESSION['logout_timestamp'], $_SESSION['secure_logout']);
+            
+            switch($db_acc_type) {
+                case '1': // Admin
+                    header("Location: index.php");
+                    break;
+                case '2': // User/Parent
+                    header("Location: parent_dashboard.php");
+                    break;
+                case '3': // Supervisor
+                    header("Location: index.php");
+                    break;
+                case '4': // Staff/Teacher
+                    header("Location: index2.php");
+                    break;
+            }
+            exit;
+        } else {
+            $otpErr = "Incorrect OTP";
+        }
+    }
+} else if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Only process login if OTP is NOT set
+    if (empty($_POST["email"])) {
+        $emailErr = "Email is required";
+    } else {
+        $email = $_POST["email"];
+    }
+    if (empty($_POST["password"])) {
+        $passwordErr = "Password required";
+    } else {
+        $password = $_POST["password"];
+    }
 
-if ($studentsTableExists) {
-    $whereClause = $viewArchived ? "WHERE archived = 1" : "WHERE archived = 0";
-    $result = $conn->query("SELECT * FROM students $whereClause ORDER BY id DESC");
-    if (!$result) {
-        die("Query failed: " . $conn->error);
+    if ($password && $email) {
+        $check_email = mysqli_query($conn, "SELECT * FROM login_table WHERE email = '".mysqli_real_escape_string($conn, $email)."'");
+        $check_email_row = mysqli_num_rows($check_email);
+        if ($check_email_row > 0) {
+            $row = mysqli_fetch_assoc($check_email);
+            $db_pass = $row["password"];
+            if ($password == $db_pass) {
+                // Generate OTP and send to email
+                $otp = rand(100000, 999999);
+                $_SESSION['otp'] = $otp;
+                $_SESSION['email'] = $email;
+                $_SESSION['account_type'] = $row["account_type"];
+
+                // Send OTP using PHPMailer with timeout
+                $mail = new PHPMailer(true);
+                try {
+                    $mail->isSMTP();
+                    $mail->Host       = 'smtp.gmail.com';
+                    $mail->SMTPAuth   = true;
+                    $mail->Username   = 'jheyjheypogi30@gmail.com';
+                    $mail->Password   = 'rudolvpyhkjasvqn';
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                    $mail->Port       = 587;
+                    $mail->Timeout    = 10; // 10 second timeout
+                    $mail->SMTPKeepAlive = true;
+
+                    $mail->setFrom('jheyjheypogi30@gmail.com', 'Yakap Daycare Center');
+                    $mail->addAddress($email);
+                    $mail->isHTML(true);
+                    $mail->Subject = 'Your OTP Code - Yakap Daycare Center';
+                    
+                    // Simplified email template for faster sending
+                    $mail->Body = "
+                    <h2>🔐 OTP Verification</h2>
+                    <p>Your OTP code is: <strong style='font-size: 24px; color: #1B5E20;'>$otp</strong></p>
+                    <p>This code is valid for 5 minutes only.</p>
+                    <p>Do not share this code with anyone.</p>
+                    ";
+
+                    $mail->send();
+                } catch (Exception $e) {
+                    $otpErr = "OTP could not be sent. Mailer Error: {$mail->ErrorInfo}";
+                }
+                // Show OTP form after sending - no redirect needed
+                // The form will be shown below
+            } else {
+                $passwordErr = "Incorrect password";
+            }
+        } else {
+            $emailErr = "Your email is unregistered";
+        }
     }
 }
-
 ?>
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title><?php echo $viewArchived ? 'Archived Students' : 'Students List'; ?> - Yakap Daycare Management System</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Yakap Daycare Management System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* General Styles */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { box-sizing: border-box; }
+        html, body { max-width: 100%; overflow-x: hidden; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #F4EDE4 0%, #E8F5E8 100%);
-            min-height: 100vh;
-            color: #2B2B2B;
-        }
-
-        .container {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 280px;
-            background: linear-gradient(180deg, #1B5E20 0%, #2E7D32 100%);
-            color: white;
-            padding: 0;
-            position: fixed;
-            left: 0;
-            top: 0;
-            height: 100vh;
-            z-index: 1000;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-        }
-
-        .sidebar.collapsed {
-            transform: translateX(-280px);
-        }
-
-        .sidebar-header {
-            padding: 30px 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-
-        .sidebar-header img {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            margin-bottom: 15px;
-            border: 3px solid #FFD23C;
-            object-fit: cover;
-        }
-
-        .sidebar-header h1 {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-
-        .sidebar-header p {
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        .sidebar-nav {
-            padding: 20px 0;
-        }
-
-        .nav-item {
-            margin: 5px 15px;
-        }
-
-        .nav-item a {
-            display: flex;
-            align-items: center;
-            padding: 15px 20px;
-            color: white;
-            text-decoration: none;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-
-        .nav-item a:hover,
-        .nav-item a.active {
-            background: linear-gradient(135deg, #FFD23C 0%, #FFB347 100%);
-            color: #1B5E20;
-            transform: translateX(5px);
-            box-shadow: 0 4px 15px rgba(255, 210, 60, 0.3);
-        }
-
-        .nav-item a i {
-            margin-right: 12px;
-            font-size: 18px;
-            width: 20px;
-        }
-
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            margin-left: 280px;
-            padding: 30px;
-            transition: margin-left 0.3s ease;
-        }
-
-        .main-content.expanded {
-            margin-left: 0;
-        }
-
-        /* Header */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding: 20px 0;
-        }
-
-        .header h1 {
-            font-size: 32px;
-            font-weight: 700;
-            color: #1B5E20;
-            display: flex;
-            align-items: center;
-        }
-
-        .header h1 i {
-            margin-right: 15px;
-            color: #FFD23C;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        .toggle-sidebar {
-            background: #1B5E20;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.3s ease;
-        }
-
-        .toggle-sidebar:hover {
-            background: #0F4A2A;
-            transform: scale(1.05);
-        }
-
-        .current-time {
-            background: white;
-            padding: 10px 20px;
-            border-radius: 25px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            font-weight: 600;
-            color: #1B5E20;
-        }
-
-        /* Content Container */
-        .content-container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.1);
-            padding: 30px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .content-container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, #1B5E20, #FFD23C);
-        }
-
-        /* Search and Add Section */
-        .search-add-section {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            gap: 20px;
-        }
-
-        .search-container {
-            position: relative;
-            flex: 1;
-            max-width: 500px;
-        }
-
-        .search-icon {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #6c757d;
-            font-size: 18px;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 15px 20px 15px 50px;
-            border: 2px solid #E9ECEF;
-            border-radius: 12px;
-            font-size: 16px;
-            background-color: white;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: #1B5E20;
-            box-shadow: 0 0 0 3px rgba(27, 94, 32, 0.1), 0 4px 15px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-
-        .search-input::placeholder {
-            color: #6c757d;
-        }
-
-        .add-student-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 15px 25px;
-            background: linear-gradient(135deg, #28A745 0%, #20C997 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-            white-space: nowrap;
-        }
-
-        .add-student-btn:hover {
-            background: linear-gradient(135deg, #218838 0%, #1EA085 100%);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
-        }
-
-        /* Table Styling */
-        .table-container {
-            background: white;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            margin-top: 20px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        table th {
-            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
-            color: white;
-            padding: 20px 15px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 16px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        table td {
-            padding: 18px 15px;
-            border-bottom: 1px solid #E9ECEF;
-            font-size: 15px;
-            vertical-align: middle;
-        }
-
-        table tr:hover {
-            background: linear-gradient(135deg, #F8F9FA 0%, #E9ECEF 100%);
-            transform: scale(1.01);
-            transition: all 0.2s ease;
-        }
-
-        table tr:last-child td {
-            border-bottom: none;
-        }
-
-        /* Avatar Styling */
-        .avatar-cell {
-            width: 80px;
-            text-align: center;
-        }
-
-        .avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid #1B5E20;
-            box-shadow: 0 4px 12px rgba(27, 94, 32, 0.2);
-        }
-
-        /* Action Buttons */
-        .action-buttons {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .btn-view {
-            background: linear-gradient(135deg, #FFD23C 0%, #FFB347 100%);
-            color: #1B5E20;
-            padding: 10px 18px;
-            border-radius: 10px;
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(255, 210, 60, 0.3);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-view:hover {
-            background: linear-gradient(135deg, #FFB347 0%, #FF8C00 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 179, 71, 0.4);
-        }
-
-        .btn-progress {
-            background: linear-gradient(135deg, #4DA3FF 0%, #1E88E5 100%);
-            color: white;
-            padding: 10px 18px;
-            border-radius: 10px;
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(30, 136, 229, 0.3);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-progress:hover {
-            background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(21, 101, 192, 0.4);
-        }
-
-        .btn-docs {
-            background: linear-gradient(135deg, #6f42c1 0%, #8a63d2 100%);
-            color: white;
-            padding: 10px 18px;
-            border-radius: 10px;
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(143, 66, 192, 0.3);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-docs:hover {
-            background: linear-gradient(135deg, #8a63d2 0%, #6f42c1 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(143, 66, 192, 0.4);
-        }
-
-        .btn-delete {
-            background: linear-gradient(135deg, #FF6B6B 0%, #E63946 100%);
-            color: white;
-            padding: 10px 18px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(230, 57, 70, 0.3);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-delete:hover {
-            background: linear-gradient(135deg, #E63946 0%, #C82333 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(230, 57, 70, 0.4);
-        }
-
-        /* Modal Styling */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1200;
-            backdrop-filter: blur(5px);
-        }
-
-        .modal {
-            width: 90%;
-            max-width: 800px;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-            transform: scale(0.9);
-            transition: transform 0.3s ease;
-        }
-
-        .modal-overlay.show .modal {
-            transform: scale(1);
-        }
-
-        .modal-header {
-            padding: 25px 30px;
-            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .modal-title {
             margin: 0;
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #1B2A2F;
+            /* Background image with soft overlay for readability */
+            background: linear-gradient(rgba(255, 255, 255, 0.21) rgba(255, 255, 255, 0.32)), url('image.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
         }
-
-        .modal-close {
-            background: transparent;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: white;
-            padding: 5px;
-            border-radius: 50%;
-            transition: all 0.3s ease;
+        .nav {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 28px; position: sticky; top: 0; background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(8px); box-shadow: 0 2px 12px rgba(0,0,0,0.05); z-index: 10;
         }
-
-        .modal-close:hover {
-            background: rgba(255,255,255,0.2);
-            transform: rotate(90deg);
+        .brand { display:flex; align-items:center; gap:10px; font-weight:800; color:#1B5E20; }
+        .brand img { width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid #FFD23C; }
+        .nav-actions { display:flex; gap:12px; }
+        .btn {
+            display:inline-flex; align-items:center; gap:8px; text-decoration:none; cursor:pointer;
+            padding: 12px 18px; border-radius: 12px; font-weight: 600; transition: .25s all ease;
         }
+        .btn-login { background: linear-gradient(135deg,#1B5E20,#2E7D32); color:#fff; box-shadow: 0 6px 18px rgba(27, 94, 32, .25); }
+        .btn-login:hover { transform: translateY(-2px); }
+        .btn-outline { border:2px solid #1B5E20; color:#1B5E20; background:#fff; }
+        .btn-outline:hover { background:#1B5E20; color:#fff; }
 
-        .modal-body {
-            padding: 30px;
+        .hero {
+            display:grid; grid-template-columns: 1.2fr 1fr; align-items:center; gap: 30px;
+            padding: 60px 28px; max-width:1100px; margin: 0 auto;
         }
-
-        .details-grid {
-            display: grid;
-            grid-template-columns: 200px 1fr;
-            gap: 15px 20px;
-            align-items: center;
+        .hero h1 { font-size: 40px; line-height: 1.15; margin: 0 0 10px; color:#1B5E20; }
+        .hero p { font-size: 18px; color:#35534B; margin: 0 0 22px; }
+        .hero-cta { display:flex; gap:12px; flex-wrap:wrap; }
+        .hero-card {
+            background:#fff; border-radius: 20px; padding: 22px; box-shadow: 0 12px 36px rgba(0,0,0,.08);
+            display:grid; grid-template-columns: 1fr 1fr; gap:16px;
         }
-
-        .label {
-            font-weight: 700;
-            color: #1B5E20;
-            font-size: 16px;
+        .hero-card .tile {
+            background: linear-gradient(135deg, #F8F9FA, #E9ECEF);
+            border:1px solid #E9ECEF; border-radius: 14px; padding:16px; display:flex; gap:12px; align-items:center;
         }
+        .tile i { color:#FFD23C; font-size: 22px; }
+        .tile b { color:#1B5E20; }
 
-        .value {
-            color: #2B2B2B;
-            font-size: 16px;
-            padding: 8px 0;
-        }
+        .features { padding: 10px 28px 60px; max-width:1100px; margin: 0 auto; }
+        .features h2 { color:#1B5E20; margin-bottom: 16px; }
+        .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:18px; }
+        .card { background:#fff; border-radius:16px; padding:18px; box-shadow: 0 10px 28px rgba(0,0,0,.06); }
+        .card h3 { margin:0 0 6px; color:#1B5E20; }
+        .card p { margin:0; color:#4A5D57; }
 
-        /* Alert Messages */
-        .alert {
-            padding: 15px 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .footer { text-align:center; padding: 30px; color:#6C757D; }
 
-        .alert-success {
-            background: linear-gradient(135deg, #D4EDDA 0%, #C3E6CB 100%);
-            color: #155724;
-            border: 1px solid #C3E6CB;
-        }
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 50; overflow-x: hidden; }
+        .modal { width: 92vw; max-width: 640px; background: #fff; border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.25); overflow: hidden; transform: translateY(10px); opacity: 0; transition: .2s ease; overflow-x: hidden; }
+        .modal-header { padding: 18px 20px; background: linear-gradient(135deg,#1B5E20,#2E7D32); color: #fff; display:flex; align-items:center; justify-content: space-between; }
+        .modal-title { font-weight: 700; }
+        .modal-close { background: transparent; border: 0; color: #fff; font-size: 18px; cursor: pointer; }
+        .modal-body { padding: 20px; max-width: 100%; overflow-x: hidden; overflow-y: auto; }
+        .field { display:flex; flex-direction: column; gap:8px; margin-bottom: 14px; }
+        .field label { font-weight: 600; color:#1B5E20; }
+        .input { padding: 12px 14px; border-radius: 10px; border: 2px solid #E9ECEF; font-size: 15px; }
+        .input:focus { outline: none; border-color:#1B5E20; box-shadow: 0 0 0 3px rgba(27,94,32,.12); }
+        .actions { display:flex; gap:10px; justify-content:flex-end; margin-top: 6px; }
+        .modal-overlay.show { display:flex; }
+        .modal-overlay.show .modal { transform: translateY(0); opacity: 1; }
 
-        .alert-error {
-            background: linear-gradient(135deg, #F8D7DA 0%, #F5C6CB 100%);
-            color: #721C24;
-            border: 1px solid #F5C6CB;
-        }
+        /* Enrollment Modal (large) */
+        .modal--wide .modal { max-width: min(1100px, 98vw); width: 98vw; overflow-x: hidden; }
+        .modal--wide .modal-body { padding: 0; max-width: 100%; overflow-x: hidden; overflow-y: auto; }
+        .enroll-frame { width: 100%; height: 85vh; border: none; display:block; }
 
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-280px);
-            }
+        /* Prevent sideways scroll inside modal content */
+        .modal * { max-width: 100%; box-sizing: border-box; }
 
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .main-content {
-                margin-left: 0;
-            }
-
-            .search-add-section {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 15px;
-            }
-
-            .search-container {
-                max-width: none;
-            }
-
-            .add-student-btn {
-                justify-content: center;
-            }
-
-            .table-container {
-                overflow-x: auto;
-            }
-
-            table {
-                min-width: 600px;
-            }
-
-            .action-buttons {
-                flex-direction: column;
-                gap: 8px;
-            }
-
-            .details-grid {
-                grid-template-columns: 1fr;
-                gap: 10px;
-            }
-
-            .label {
-                font-weight: 600;
-                color: #1B5E20;
-            }
-        }
-
-        /* Loading Animation */
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #1B5E20;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6C757D;
-        }
-
-        .empty-state i {
-            font-size: 64px;
-            margin-bottom: 20px;
-            color: #DEE2E6;
-        }
-
-        .empty-state h3 {
-            font-size: 24px;
-            margin-bottom: 10px;
-            color: #495057;
-        }
-
-        .empty-state p {
-            font-size: 16px;
-            margin-bottom: 30px;
-        }
-
-        /* Documents modal */
-        .docs-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 12px;
-        }
-        .doc-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 14px;
-            border: 1px solid #E9ECEF;
-            border-radius: 10px;
-            background: #FAFAFA;
-        }
-        .doc-title {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 600;
-            color: #1B5E20;
-        }
-        .doc-actions a {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: linear-gradient(135deg, #20C997 0%, #17A2B8 100%);
-            color: white;
-            text-decoration: none;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-weight: 600;
-        }
-        .doc-actions .missing {
-            background: #FFF8E1;
-            color: #8A6D3B;
-            border: 1px solid #FFECB5;
-            padding: 6px 10px;
-            border-radius: 8px;
-            font-weight: 600;
-        }
-
-        /* Image/PDF preview modal */
-        .preview-content {
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            max-width: 90vw;
-            max-height: 85vh;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        .preview-img { max-width: 90vw; max-height: 85vh; display:block; }
-        .preview-actions {
-            position: absolute;
-            top: 12px;
-            right: 16px;
-            display: flex;
-            gap: 10px;
-        }
-        .preview-btn {
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
+        @media (max-width: 900px) {
+            .hero { grid-template-columns: 1fr; }
+            .hero-card { grid-template-columns: 1fr; }
+            .grid { grid-template-columns: 1fr; }
         }
     </style>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" href="logo.png">
+    <meta name="theme-color" content="#1B5E20"/>
 </head>
 <body>
-    <div class="container">
-        <!-- Sidebar -->
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <img src="logo.png" alt="Yakap Daycare Center Logo" onerror="this.src='yakaplogopo.jpg'">
-                <h1>Yakap Daycare Center</h1>
-                <p>Management System</p>
-                <p>Admin</p>
-            </div>
-            <nav class="sidebar-nav">
-                <div class="nav-item">
-                    <a href="dashboard.php">
-                        <i class="fas fa-tachometer-alt"></i>
-                        Dashboard
-                    </a>
-                </div>
-                
-                <div class="nav-item">
-                    <a href="index.php" class="active">
-                        <i class="fas fa-users"></i>
-                        Enrollees List
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="official_students.php">
-                        <i class="fas fa-user-graduate"></i>
-                        Official Students
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="teachers_clean.php">
-                        <i class="fas fa-chalkboard-teacher"></i>
-                        Add Teacher
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="teachers_list_clean.php">
-                        <i class="fas fa-address-book"></i>
-                        Teachers List
-                    </a>
-                </div>
-                
-                <div class="nav-item">
-                    <a href="#">
-                        <i class="fas fa-file-alt"></i>
-                        Reports
-                    </a>
-                </div>
-            </nav>
+    <header class="nav">
+        <div class="brand">
+            <img src="logo.png" alt="Yakap Daycare" onerror="this.src='yakaplogopo.jpg'">
+            <span>Yakap Daycare Center</span>
         </div>
+        <div class="nav-actions"></div>
+    </header>
 
-        <!-- Main Content -->
-        <div class="main-content" id="main-content">
-            <!-- Header -->
-            <div class="header">
-                <h1><i class="fas fa-users"></i> <?php echo $viewArchived ? 'Archived Students' : 'Students List'; ?></h1>
-                <div class="header-actions">
-                    <div class="current-time" id="current-time"></div>
-                    <a href="logout.php" class="toggle-sidebar" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none;" title="Logout">
-                        <i class="fas fa-right-from-bracket"></i>
-                        <span style="font-size:16px; font-weight:600;">Logout</span>
-                    </a>
-                    <button class="toggle-sidebar" id="toggle-sidebar">
-                        <i class="fas fa-bars"></i>
-                    </button>
+    <section class="hero">
+        <div>
+            <h1>Manage Students, Assess Progress, Empower Teachers</h1>
+            <p>Streamlined enrollment, progress assessments, attendance tracking, and teacher management for Early Childhood Care & Development.</p>
+            
+            <?php if ($logout_message): ?>
+                <div style="background: linear-gradient(135deg, #D4EDDA, #C3E6CB); color: #155724; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #C3E6CB; text-align: center;">
+                    <i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($logout_message); ?>
                 </div>
+            <?php endif; ?>
+            
+            <div class="hero-cta">
+                <button type="button" class="btn btn-login" id="openLogin"><i class="fas fa-right-to-bracket"></i> Log In</button>
+                <button type="button" class="btn btn-outline" id="openParent"><i class="fas fa-user"></i> Parent Portal</button>
+                <button type="button" class="btn btn-outline" id="openEnroll"><i class="fas fa-user-plus"></i> Enroll</button>
             </div>
+        </div>
+        <div class="hero-card">
+            <div class="tile"><i class="fas fa-user-plus"></i><div><b>Enrollment</b><div>Quickly add and manage student info</div></div></div>
+            <div class="tile"><i class="fas fa-chart-line"></i><div><b>Progress</b><div>Capture developmental milestones</div></div></div>
+            <div class="tile"><i class="fas fa-calendar-check"></i><div><b>Attendance</b><div>Track daily attendance</div></div></div>
+            <div class="tile"><i class="fas fa-chalkboard-teacher"></i><div><b>Teachers</b><div>Maintain teacher profiles</div></div></div>
+        </div>
+    </section>
 
-            <!-- Content Container -->
-            <div class="content-container">
-                <!-- Success/Error Messages -->
-                <?php if (isset($_GET['success'])): ?>
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle"></i>
-                        <?php 
-                        switch($_GET['success']) {
-                            case 'student_deleted':
-                                echo 'Student has been successfully deleted!';
-                                break;
-                            case 'student_updated':
-                                echo 'Student information has been successfully updated!';
-                                break;
-                            case 'student_added':
-                                echo 'Student has been successfully added!';
-                                break;
-                            case 'student_accepted':
-                                echo 'Student application has been accepted!';
-                                break;
-                            case 'student_rejected':
-                                echo 'Student application has been rejected!';
-                                break;
-                            case 'student_archived':
-                                echo 'Student has been archived successfully!';
-                                break;
-                            case 'student_restored':
-                                echo 'Student has been restored successfully!';
-                                break;
-                            default:
-                                echo 'Operation completed successfully!';
-                        }
-                        ?>
-                    </div>
-                <?php endif; ?>
-                
-                <?php if (isset($_GET['error'])): ?>
-                    <div class="alert alert-error">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <?php 
-                        switch($_GET['error']) {
-                            case 'student_not_found':
-                                echo 'Student not found!';
-                                break;
-                            case 'delete_failed':
-                                echo 'Failed to delete student. Please try again.';
-                                break;
-                            case 'no_name_provided':
-                                echo 'No student name provided.';
-                                break;
-                            default:
-                                echo 'An error occurred.';
-                        }
-                        ?>
-                    </div>
-                <?php endif; ?>
-                
-                <!-- Search and Add Section -->
-                <div class="search-add-section">
-                    <div class="search-container">
-                        <i class="fas fa-search search-icon"></i>
-                        <input type="text" class="search-input" placeholder="Search students by name, age, or sex..." id="searchInput">
-                    </div>
-                    <div class="action-buttons-container" style="display: flex; gap: 10px; align-items: center;">
-                        <?php if ($viewArchived): ?>
-                            <a href="index.php" class="btn-view" style="background: linear-gradient(135deg,#007BFF,#0056B3); color:white; text-decoration:none; padding:12px 20px; border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:8px;">
-                                <i class="fas fa-arrow-left"></i>
-                                Back to Active Students
-                            </a>
-                        <?php else: ?>
-                            <a href="index.php?view=archived" class="btn-delete" style="background: linear-gradient(135deg,#6C757D,#495057); color:white; text-decoration:none; padding:12px 20px; border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:8px;">
-                                <i class="fas fa-archive"></i>
-                                Archived Students
-                            </a>
-                        <?php endif; ?>
-                    </div>
+    <section class="features">
+        <h2>Why Yakap?</h2>
+        <div class="grid">
+            <div class="card">
+                <h3><i class="fas fa-lock"></i> Secure</h3>
+                <p>Role-based access with protected dashboards.</p>
+            </div>
+            <div class="card">
+                <h3><i class="fas fa-bolt"></i> Efficient</h3>
+                <p>Fast data entry and clear reporting tools.</p>
+            </div>
+            <div class="card">
+                <h3><i class="fas fa-heart"></i> Child-centered</h3>
+                <p>Built to support ECCD assessments and outcomes.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">© <?php echo date('Y'); ?> Yakap Daycare Center</footer>
+
+    <!-- Login Modal -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+            <div class="modal-header">
+                <div class="modal-title" id="loginTitle">
+                    <i class="fas fa-<?php echo isset($_SESSION['otp']) ? 'shield-alt' : 'right-to-bracket'; ?>"></i> 
+                    <?php echo isset($_SESSION['otp']) ? 'Verify OTP' : 'Login'; ?>
                 </div>
-
-                <!-- Table Container -->
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th><i class="fas fa-image"></i> Photo</th>
-                                <th><i class="fas fa-user"></i> Last Name</th>
-                                <th><i class="fas fa-user"></i> First Name</th>
-                                <th><i class="fas fa-user"></i> Middle Initial</th>
-                                <th><i class="fas fa-calendar"></i> Date of Birth</th>
-                                <th><i class="fas fa-birthday-cake"></i> Age</th>
-                                <th><i class="fas fa-venus-mars"></i> Sex</th>
-                                <th><i class="fas fa-cogs"></i> Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $hasStudents = false;
-                            if ($result) {
-                                while($row = $result->fetch_assoc()): 
-                                    $hasStudents = true;
-                            ?>
-                            <tr>
-                                <td class="avatar-cell">
-                                    <?php 
-                                    // Get the latest picture for this student from requirements
-                                    $pic_query = $studentsTableExists
-                                        ? $conn->query("SELECT picture FROM students WHERE id = " . $row['id'] . " AND picture IS NOT NULL ORDER BY created_at DESC LIMIT 1")
-                                        : false;
-                                    $pic_row = $pic_query ? $pic_query->fetch_assoc() : false;
-                                    $pic_src = $pic_row ? $pic_row['picture'] : 'yakaplogopo.jpg';
-                                    ?>
-                                    <img src="<?php echo $pic_src; ?>" class="avatar" alt="Student Photo">
-                                </td>
-                                <td><?php echo htmlspecialchars($row['last_name']); ?></td>
-                                <td><?php echo htmlspecialchars($row['first_name']); ?></td>
-                                <td><?php echo htmlspecialchars($row['middle_initial']); ?></td>
-                                <td><?php echo date('M d, Y', strtotime($row['birth_date'])); ?></td>
-                                <td><?php echo $row['age']; ?> years old</td>
-                                <td>
-                                    <span style="display: inline-flex; align-items: center; gap: 5px;">
-                                        <?php if($row['sex'] == 'Male'): ?>
-                                            <i class="fas fa-male" style="color: #007BFF;"></i>
-                                        <?php else: ?>
-                                            <i class="fas fa-female" style="color: #E83E8C;"></i>
-                                        <?php endif; ?>
-                                        <?php echo $row['sex']; ?>
-                                    </span>
-                                </td>
-                                
-                                <td>
-                                    <div class="action-buttons">
-                                        <?php 
-                                        $gmTotals = ['t1' => 0, 't2' => 0, 't3' => 0];
-                                        $gm = $conn->query("SELECT payload FROM grossmotor_submissions WHERE student_id = " . intval($row['id']) . " ORDER BY created_at DESC LIMIT 1");
-                                        if ($gm && ($gmRow = $gm->fetch_assoc())) {
-                                            $data = json_decode($gmRow['payload'], true);
-                                            if (is_array($data)) {
-                                                foreach ($data as $item) {
-                                                    $gmTotals['t1'] += isset($item['eval1']) && is_numeric($item['eval1']) ? (int)$item['eval1'] : 0;
-                                                    $gmTotals['t2'] += isset($item['eval2']) && is_numeric($item['eval2']) ? (int)$item['eval2'] : 0;
-                                                    $gmTotals['t3'] += isset($item['eval3']) && is_numeric($item['eval3']) ? (int)$item['eval3'] : 0;
-                                                }
-                                            }
-                                        }
-                                        ?>
-                                        <?php $status = isset($row['status']) ? $row['status'] : 'PENDING'; ?>
-                                        <?php if ($viewArchived): ?>
-                                            <!-- Archived Students View - Show Restore Button -->
-                                            <form method="post" action="index.php" style="display:inline;" onsubmit="return confirm('Restore this student to active list?');">
-                                                <input type="hidden" name="id" value="<?= intval($row['id']) ?>">
-                                                <input type="hidden" name="action" value="RESTORE">
-                                                <button type="submit" class="btn-view" style="background: linear-gradient(135deg,#17A2B8,#138496); color:white;">
-                                                    <i class="fas fa-undo"></i>
-                                                    Restore
-                                                </button>
-                                            </form>
-                                        <?php else: ?>
-                                            <!-- Active Students View -->
-                                            <?php if ($status === 'ACCEPTED'): ?>
-                                                <span style="display:inline-flex; align-items:center; gap:6px; background:#E6FFED; color:#1E7E34; border:1px solid #C3E6CB; padding:6px 10px; border-radius:999px; font-weight:600;">
-                                                    <i class="fas fa-check-circle"></i> Accepted
-                                                </span>
-                                            <?php elseif ($status === 'REJECTED'): ?>
-                                                <span style="display:inline-flex; align-items:center; gap:6px; background:#FFF0F0; color:#B02A37; border:1px solid #F5C2C7; padding:6px 10px; border-radius:999px; font-weight:600;">
-                                                    <i class="fas fa-times-circle"></i> Rejected
-                                                </span>
-                                            <?php else: ?>
-                                                <form method="post" action="index.php" style="display:inline;">
-                                                    <input type="hidden" name="id" value="<?= intval($row['id']) ?>">
-                                                    <input type="hidden" name="action" value="ACCEPT">
-                                                    <button type="submit" class="btn-view" style="background: linear-gradient(135deg,#28A745,#20C997); color:#1B5E20;">
-                                                        <i class="fas fa-check"></i>
-                                                        Accept
-                                                    </button>
-                                                </form>
-                                                <form method="post" action="index.php" style="display:inline;" onsubmit="return confirm('Mark this application as rejected?');">
-                                                    <input type="hidden" name="id" value="<?= intval($row['id']) ?>">
-                                                    <input type="hidden" name="action" value="REJECT">
-                                                    <button type="submit" class="btn-delete">
-                                                        <i class="fas fa-times"></i>
-                                                        Reject
-                                                    </button>
-                                                </form>
-                                            <?php endif; ?>
-                                            <button 
-                                                class="btn-docs"
-                                                title="View Documents"
-                                                data-docs-id="<?= intval($row['id']) ?>"
-                                            >
-                                                <i class="fas fa-folder-open"></i>
-                                                Documents
-                                            </button>
-                                            <!-- Archive Button for all active students -->
-                                            <form method="post" action="index.php" style="display:inline;" onsubmit="return confirm('Archive this student? They will be moved to archived list.');">
-                                                <input type="hidden" name="id" value="<?= intval($row['id']) ?>">
-                                                <input type="hidden" name="action" value="ARCHIVE">
-                                                <button type="submit" class="btn-delete" style="background: linear-gradient(135deg,#6C757D,#495057); color:white;">
-                                                    <i class="fas fa-archive"></i>
-                                                    Archive
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endwhile; }
-                            ?>
-                            
-                            <?php if (!$hasStudents): ?>
-                            <tr>
-                                <td colspan="8">
-                                    <div class="empty-state">
-                                        <i class="fas fa-users"></i>
-                                        <h3>No Students Found</h3>
-                                        <p>There are no enrolled students yet. Start by adding a new student.</p>
-                                        <a href="add_child.php" class="add-student-btn">
-                                            <i class="fas fa-plus"></i>
-                                            Add First Student
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
+                <button class="modal-close" id="closeLogin" aria-label="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <?php if (isset($_SESSION['otp'])): ?>
+                    <!-- OTP Verification Form -->
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="background: #E8F5E8; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-envelope" style="color: #1B5E20; margin-right: 8px;"></i>
+                            <strong>OTP sent to:</strong> <?php echo htmlspecialchars($_SESSION['email']); ?>
+                        </div>
+                        <p style="color: #666; font-size: 14px;">Enter the 6-digit code sent to your email</p>
+                    </div>
+                    <form method="post" action="landing.php">
+                        <div class="field">
+                            <label for="otp">OTP Code</label>
+                            <input class="input" type="text" id="otp" name="otp" placeholder="123456" maxlength="6" style="text-align: center; font-size: 18px; letter-spacing: 3px;" required>
+                            <?php if($otpErr): ?>
+                                <div style="color: #e74c3c; font-size: 14px; margin-top: 5px;"><?php echo $otpErr; ?></div>
                             <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Modal HTML -->
-            <div class="modal-overlay" id="viewModal">
-                <div class="modal">
-                    <div class="modal-header">
-                        <h3 class="modal-title">
-                            <i class="fas fa-user"></i>
-                            Student Details
-                        </h3>
-                        <button class="modal-close" id="modalClose" aria-label="Close">
-                            <i class="fas fa-times"></i>
+                        </div>
+                        <div class="actions">
+                            <button type="button" class="btn btn-outline" id="cancelLogin">Cancel</button>
+                            <button type="submit" class="btn btn-login">Verify OTP</button>
+                        </div>
+                    </form>
+                <?php else: ?>
+                    <!-- Regular Login Form -->
+                    <form method="post" action="landing.php">
+                        <div class="field">
+                            <label for="email">Email</label>
+                            <input class="input" type="email" id="email" name="email" placeholder="you@example.com" value="<?php echo htmlspecialchars($email); ?>" required>
+                            <?php if($emailErr): ?>
+                            <div style="color:#E83E6B; font-size: 13px; margin-top:4px;"><?php echo $emailErr; ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="field">
+                            <label for="password">Password</label>
+                            <input class="input" type="password" id="password" name="password" placeholder="Your password" value="<?php echo htmlspecialchars($password); ?>" required>
+                            <?php if($passwordErr): ?>
+                            <div style="color:#E83E6B; font-size: 13px; margin-top:4px;"><?php echo $passwordErr; ?></div>
+                            <?php endif; ?>
+                        </div>
+                    <div class="actions">
+                        <button type="button" class="btn btn-outline" id="cancelLogin">Cancel</button>
+                        <button type="submit" class="btn btn-login" id="loginBtn">
+                            <span id="loginText">Login</span>
+                            <span id="loginSpinner" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i> Sending OTP...
+                            </span>
                         </button>
                     </div>
-                    <div class="modal-body">
-                        <div class="details-grid">
-                            <div class="label">Last Name</div><div class="value" id="last_name"></div>
-                            <div class="label">First Name</div><div class="value" id="first_name"></div>
-                            <div class="label">Middle Initial</div><div class="value" id="middle_initial"></div>
-                            <div class="label">Birth Date</div><div class="value" id="birth_date"></div>
-                            <div class="label">Age</div><div class="value" id="age"></div>
-                            <div class="label">Sex</div><div class="value" id="sex"></div>
-                            <div class="label">Place of Birth</div><div class="value" id="birth_city"></div>
-                            <div class="label">Address</div><div class="value" id="address"></div>
-                            <div class="label">Mother</div><div class="value" id="mother"></div>
-                            <div class="label">Father</div><div class="value" id="father"></div>
-                            <div class="label">Gross Motor Totals</div>
-                            <div class="value" id="gross_motor_totals">N/A</div>
-                        </div>
-                    </div>
-                </div>
+                    </form>
+                <?php endif; ?>
             </div>
+        </div>
+    </div>
 
-            <!-- Documents Modal -->
-            <div class="modal-overlay" id="docsModal">
-                <div class="modal">
-                    <div class="modal-header">
-                        <h3 class="modal-title">
-                            <i class="fas fa-folder-open"></i>
-                            Student Documents
-                        </h3>
-                        <button class="modal-close" id="docsModalClose" aria-label="Close">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <div id="docsContent">
-                            <div class="docs-grid">
-                                <!-- Filled by JS -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <!-- Enrollment Modal -->
+    <div class="modal-overlay modal--wide" id="enrollModal">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="enrollTitle">
+            <div class="modal-header">
+                <div class="modal-title" id="enrollTitle"><i class="fas fa-user-plus"></i> Enroll Student</div>
+                <button class="modal-close" id="closeEnroll" aria-label="Close"><i class="fas fa-times"></i></button>
             </div>
+            <div class="modal-body">
+                <iframe class="enroll-frame" src="add_stud.php?embed=1" title="Enroll Student"></iframe>
+            </div>
+        </div>
+    </div>
 
-            <!-- Image Preview Modal -->
-            <div class="modal-overlay" id="imgPreviewModal">
-                <div class="modal" style="background:#000; position:relative;">
-                    <div class="preview-actions">
-                        <button class="preview-btn" id="imgPreviewClose"><i class="fas fa-times"></i> Close</button>
-                        <a class="preview-btn" id="imgPreviewOpen" href="#" target="_blank" rel="noopener">Open in new tab</a>
-                        <a class="preview-btn" id="imgPreviewDownload" href="#" download>Download</a>
-                    </div>
-                    <div class="modal-body" style="display:flex; align-items:center; justify-content:center; background:#000;">
-                        <img id="imgPreviewEl" class="preview-img" src="" alt="Document Preview" />
-                    </div>
-                </div>
+    <!-- Parent Portal Modal -->
+    <div class="modal-overlay" id="parentModal">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="parentTitle">
+            <div class="modal-header">
+                <div class="modal-title" id="parentTitle"><i class="fas fa-user"></i> Parent Portal</div>
+                <button class="modal-close" id="closeParent" aria-label="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding:0;">
+                <iframe class="enroll-frame" src="parent_login.php?embed=1" title="Parent Portal"></iframe>
             </div>
         </div>
     </div>
 
     <script>
-        // Sidebar toggle functionality
-        const sidebar = document.getElementById('sidebar');
-        const mainContent = document.getElementById('main-content');
-        const toggleBtn = document.getElementById('toggle-sidebar');
+    (function(){
+        const modal = document.getElementById('loginModal');
+        const openBtn = document.getElementById('openLogin');
+        const closeBtn = document.getElementById('closeLogin');
+        const cancelBtn = document.getElementById('cancelLogin');
+        const enrollModal = document.getElementById('enrollModal');
+        const openEnroll = document.getElementById('openEnroll');
+        const closeEnroll = document.getElementById('closeEnroll');
+        const parentModal = document.getElementById('parentModal');
+        const openParent = document.getElementById('openParent');
+        const closeParent = document.getElementById('closeParent');
 
-        // Prevent multiple rapid clicks to avoid glitching
-        let isToggling = false;
-        toggleBtn.addEventListener('click', () => {
-            if (isToggling) return;
-            isToggling = true;
-            
-            sidebar.classList.toggle('collapsed');
-            mainContent.classList.toggle('expanded');
-            
-            // Reset toggle lock after animation completes
-            setTimeout(() => {
-                isToggling = false;
-            }, 300);
-        });
-
-        // Auto-hide sidebar on mobile
-        if (window.innerWidth <= 768) {
-            sidebar.classList.add('collapsed');
-            mainContent.classList.add('expanded');
-        }
-
-        // Real-time clock
-        function updateTime() {
-            const now = new Date();
-            const timeString = now.toLocaleString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            document.getElementById('current-time').textContent = timeString;
-        }
-
-        updateTime();
-        setInterval(updateTime, 1000);
-
-        // Responsive sidebar behavior
-        window.addEventListener('resize', () => {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.add('collapsed');
-                mainContent.classList.add('expanded');
-            } else {
-                sidebar.classList.remove('collapsed');
-                mainContent.classList.remove('expanded');
-            }
-        });
-
-        // Enhanced search functionality
-        const searchInput = document.getElementById('searchInput');
-        const tableRows = document.querySelectorAll('tbody tr');
-
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            let visibleCount = 0;
-            
-            tableRows.forEach(row => {
-                // Skip empty state row
-                if (row.querySelector('.empty-state')) {
-                    return;
-                }
-
-                const cells = row.querySelectorAll('td');
-                let found = false;
-                
-                cells.forEach(cell => {
-                    if (cell.textContent.toLowerCase().includes(searchTerm)) {
-                        found = true;
-                    }
-                });
-                
-                if (found) {
-                    row.style.display = '';
-                    visibleCount++;
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-
-            // Show/hide empty state based on search results
-            const emptyState = document.querySelector('.empty-state');
-            if (emptyState) {
-                if (searchTerm && visibleCount === 0) {
-                    emptyState.innerHTML = `
-                        <i class="fas fa-search"></i>
-                        <h3>No Results Found</h3>
-                        <p>No students match your search criteria. Try different keywords.</p>
-                    `;
-                } else if (!searchTerm && visibleCount === 0) {
-                    emptyState.innerHTML = `
-                        <i class="fas fa-users"></i>
-                        <h3>No Students Found</h3>
-                        <p>There are no enrolled students yet. Start by adding a new student.</p>
-                        <a href="add_child.php" class="add-student-btn">
-                            <i class="fas fa-plus"></i>
-                            Add First Student
-                        </a>
-                    `;
-                }
-            }
-        });
-
-        // Enhanced modal functionality
-        const modal = document.getElementById('viewModal');
-        const modalClose = document.getElementById('modalClose');
-
-        function openModal() { 
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-        }
-
-        function closeModal() { 
-            modal.classList.remove('show');
-            setTimeout(() => {
-                modal.style.display = 'none';
-            }, 300);
-        }
-
-        modalClose.addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => { 
-            if (e.target === modal) closeModal(); 
-        });
-
-        // Close modal on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal.style.display === 'flex') {
-                closeModal();
-            }
-        });
-
-        // Documents modal handlers
-        const docsModal = document.getElementById('docsModal');
-        const docsModalClose = document.getElementById('docsModalClose');
-        function openDocsModal() {
-            docsModal.style.display = 'flex';
-            setTimeout(() => { docsModal.classList.add('show'); }, 10);
-        }
-        function closeDocsModal() {
-            docsModal.classList.remove('show');
-            setTimeout(() => { docsModal.style.display = 'none'; }, 300);
-        }
-        docsModalClose.addEventListener('click', closeDocsModal);
-        docsModal.addEventListener('click', (e) => { if (e.target === docsModal) closeDocsModal(); });
-
-        // View button functionality
-        document.querySelectorAll('.btn-view').forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Format birth date
-                const birthDate = new Date(btn.dataset.birth);
-                const formattedDate = birthDate.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                });
-
-                // Format sex with icon
-                const sex = btn.dataset.sex;
-                const sexIcon = sex === 'Male' ? '<i class="fas fa-male" style="color: #007BFF;"></i>' : '<i class="fas fa-female" style="color: #E83E8C;"></i>';
-
-                // Populate modal
-                document.getElementById('last_name').textContent = btn.dataset.last || 'N/A';
-                document.getElementById('first_name').textContent = btn.dataset.first || 'N/A';
-                document.getElementById('middle_initial').textContent = btn.dataset.middle || 'N/A';
-                document.getElementById('birth_date').innerHTML = formattedDate;
-                document.getElementById('age').textContent = `${btn.dataset.age || 'N/A'} years old`;
-                document.getElementById('sex').innerHTML = `${sexIcon} ${sex}`;
-                document.getElementById('birth_city').textContent = btn.dataset.birthplace || 'N/A';
-                document.getElementById('address').textContent = btn.dataset.address || 'N/A';
-                
-                // Format parent information
-                const motherInfo = btn.dataset.mother ? `${btn.dataset.mother} (${btn.dataset.motherc || 'No contact'})` : 'N/A';
-                const fatherInfo = btn.dataset.father ? `${btn.dataset.father} (${btn.dataset.fatherc || 'No contact'})` : 'N/A';
-                
-                document.getElementById('mother').textContent = motherInfo;
-                document.getElementById('father').textContent = fatherInfo;
-                // Add gross motor totals if available
-                const gm1 = Number(btn.dataset.gm1Total || 0);
-                const gm2 = Number(btn.dataset.gm2Total || 0);
-                const gm3 = Number(btn.dataset.gm3Total || 0);
-                const gmTotalsEl = document.getElementById('gross_motor_totals');
-                if (gmTotalsEl) {
-                    if (gm1 || gm2 || gm3) {
-                        gmTotalsEl.textContent = `Eval1: ${gm1} | Eval2: ${gm2} | Eval3: ${gm3}`;
-                    } else {
-                        gmTotalsEl.textContent = 'No assessment yet';
-                    }
-                }
-                
-                openModal();
-            });
-        });
-
-        // Fetch and show documents per student
-        document.querySelectorAll('[data-docs-id]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const studentId = btn.getAttribute('data-docs-id');
-                try {
-                    // Request minimal record to get file paths
-                    const response = await fetch(`index.php?fetch_docs=1&id=${encodeURIComponent(studentId)}`, { cache: 'no-store' });
-                    const data = await response.json();
-
-                    const docs = [
-                        { key: 'picture', label: 'Student Photo', icon: '<i class="fas fa-image"></i>' },
-                        { key: 'psa_birth_certificate', label: 'PSA Birth Certificate', icon: '<i class="fas fa-file-pdf"></i>' },
-                        { key: 'immunization_card', label: 'Immunization Card', icon: '<i class="fas fa-syringe"></i>' },
-                        { key: 'qc_parent_id', label: 'QC Parent ID', icon: '<i class="fas fa-id-card"></i>' },
-                        { key: 'solo_parent_id', label: 'Solo Parent ID', icon: '<i class="fas fa-id-card"></i>' },
-                        { key: 'four_ps_id', label: '4Ps ID', icon: '<i class="fas fa-id-card"></i>' },
-                        { key: 'pwd_id', label: 'PWD ID', icon: '<i class="fas fa-id-card"></i>' }
-                    ];
-
-                    const grid = document.querySelector('#docsContent .docs-grid');
-                    grid.innerHTML = '';
-                    docs.forEach(d => {
-                        const hasFile = data && data[d.key];
-                        const item = document.createElement('div');
-                        item.className = 'doc-item';
-                        const left = document.createElement('div');
-                        left.className = 'doc-title';
-                        left.innerHTML = `${d.icon} ${d.label}`;
-                        const right = document.createElement('div');
-                        right.className = 'doc-actions';
-                        if (hasFile) {
-                            const url = data[d.key];
-                            const isImage = /\.(png|jpg|jpeg|webp|gif)$/i.test(url);
-                            const viewBtn = document.createElement('a');
-                            viewBtn.href = '#';
-                            viewBtn.innerHTML = '<i class="fas fa-eye"></i> View';
-                            viewBtn.addEventListener('click', (e) => {
-                                e.preventDefault();
-                                if (isImage) {
-                                    openImagePreview(url);
-                                } else {
-                                    window.open(url, '_blank', 'noopener');
-                                }
-                            });
-                            right.appendChild(viewBtn);
-                            const dlBtn = document.createElement('a');
-                            dlBtn.href = url;
-                            dlBtn.download = '';
-                            dlBtn.innerHTML = '<i class="fas fa-download"></i> Download';
-                            right.appendChild(dlBtn);
-                        } else {
-                            const span = document.createElement('span');
-                            span.className = 'missing';
-                            span.textContent = 'Not Provided';
-                            right.appendChild(span);
-                        }
-                        item.appendChild(left);
-                        item.appendChild(right);
-                        grid.appendChild(item);
+        function openModal(){ 
+            modal.classList.add('show'); 
+            setTimeout(()=>{ 
+                const email = document.getElementById('email');
+                const otp = document.getElementById('otp');
+                if (otp) {
+                    otp.focus();
+                    // Only allow numbers in OTP input
+                    otp.addEventListener('input', function(e) {
+                        this.value = this.value.replace(/[^0-9]/g, '');
                     });
-
-                    openDocsModal();
-                } catch (err) {
-                    alert('Failed to load documents.');
+                } else if (email) {
+                    email.focus();
                 }
-            });
-        });
+            }, 50); 
+        }
+        function closeModal(){ 
+            modal.classList.remove('show'); 
+            // Clear OTP session if user cancels
+            <?php if (isset($_SESSION['otp'])): ?>
+                if (confirm('Are you sure you want to cancel? This will clear your OTP verification.')) {
+                    window.location.href = 'landing.php?clear_otp=1';
+                }
+            <?php endif; ?>
+        }
 
-        // Add loading states to action buttons
-        document.querySelectorAll('.btn-delete').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                const originalText = this.innerHTML;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-                this.style.pointerEvents = 'none';
-                
-                // Reset after 2 seconds (in case of errors)
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.style.pointerEvents = 'auto';
-                }, 2000);
-            });
-        });
+        if (openBtn) openBtn.addEventListener('click', openModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e)=>{ if(e.target === modal) closeModal(); });
+        document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
 
-        // Add hover effects to table rows
-        document.querySelectorAll('tbody tr').forEach(row => {
-            if (!row.querySelector('.empty-state')) {
-                row.addEventListener('mouseenter', function() {
-                    this.style.transform = 'scale(1.01)';
-                });
-                
-                row.addEventListener('mouseleave', function() {
-                    this.style.transform = 'scale(1)';
-                });
+        // Auto-open modal if there were validation errors from POST or OTP is in session
+        <?php if($_SERVER["REQUEST_METHOD"] === 'POST' && ($emailErr || $passwordErr || $otpErr)) { echo 'openModal();'; } ?>
+        <?php if(isset($_SESSION['otp'])) { echo 'openModal();'; } ?>
+
+        // Comprehensive back button prevention
+        function preventBackButton() {
+            // Method 1: Fill history with current page
+            for (let i = 0; i < 50; i++) {
+                history.pushState({page: 'landing'}, '', location.href);
             }
-        });
-
-        // Add click animation to buttons
-        document.querySelectorAll('.btn-view, .btn-delete, .add-student-btn, .btn-progress').forEach(btn => {
-            btn.addEventListener('click', function() {
-                this.style.transform = 'scale(0.95)';
-                setTimeout(() => {
-                    this.style.transform = '';
-                }, 150);
-            });
-        });
-
-        // Image preview modal logic
-        const imgPreviewModal = document.getElementById('imgPreviewModal');
-        const imgPreviewEl = document.getElementById('imgPreviewEl');
-        const imgPreviewClose = document.getElementById('imgPreviewClose');
-        const imgPreviewOpen = document.getElementById('imgPreviewOpen');
-        const imgPreviewDownload = document.getElementById('imgPreviewDownload');
-
-        function openImagePreview(src) {
-            imgPreviewEl.src = src;
-            imgPreviewOpen.href = src;
-            imgPreviewDownload.href = src;
-            imgPreviewModal.style.display = 'flex';
-            setTimeout(() => { imgPreviewModal.classList.add('show'); }, 10);
-        }
-        function closeImagePreview() {
-            imgPreviewModal.classList.remove('show');
-            setTimeout(() => { imgPreviewModal.style.display = 'none'; imgPreviewEl.src = ''; }, 300);
-        }
-        imgPreviewClose.addEventListener('click', closeImagePreview);
-        imgPreviewModal.addEventListener('click', (e)=>{ if (e.target === imgPreviewModal) closeImagePreview(); });
-
-        // Auto-hide alerts after 5 seconds
-        document.querySelectorAll('.alert').forEach(alert => {
-            setTimeout(() => {
-                alert.style.opacity = '0';
-                alert.style.transform = 'translateY(-20px)';
-                setTimeout(() => {
-                    alert.remove();
-                }, 300);
-            }, 5000);
-        });
-
-        // Add smooth scrolling for better UX
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
+            
+            // Method 2: Override popstate event - CRITICAL for back button
+            window.onpopstate = function(event) {
+                // Immediately push more states
+                for (let i = 0; i < 50; i++) {
+                    history.pushState({page: 'landing'}, '', location.href);
+                }
+                
+                // Show warning and prevent navigation
+                alert('You are logged out. Back navigation is disabled for security.');
+                
+                // Force reload to ensure clean state
+                window.location.reload();
+            };
+            
+            // Method 3: Disable ALL navigation keys
+            document.addEventListener('keydown', function(e) {
+                // Disable Left Arrow key (37) - PRIMARY TARGET
+                if (e.keyCode === 37) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    alert('Back navigation is disabled. You are logged out.');
+                    return false;
+                }
+                // Disable Alt+Left Arrow
+                if (e.altKey && e.keyCode === 37) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    alert('Back navigation is disabled. You are logged out.');
+                    return false;
+                }
+                // Disable Backspace key when not in input fields
+                if (e.keyCode === 8 && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+                // Disable F5 refresh
+                if (e.keyCode === 116) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+                // Disable Ctrl+R (refresh)
+                if (e.ctrlKey && e.keyCode === 82) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+                // Disable Ctrl+L (address bar)
+                if (e.ctrlKey && e.keyCode === 76) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, true); // Use capture phase
+            
+            // Method 4: Disable mouse back button
+            document.addEventListener('mouseup', function(e) {
+                if (e.button === 3) { // Back button
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    alert('Back navigation is disabled. You are logged out.');
+                    return false;
+                }
+            }, true);
+            
+            // Method 5: Disable right-click context menu
+            document.addEventListener('contextmenu', function(e) {
                 e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return false;
+            }, true);
+            
+            // Method 6: Override browser navigation
+            window.addEventListener('beforeunload', function(e) {
+                e.preventDefault();
+                e.returnValue = 'You are logged out. Any unsaved changes will be lost.';
+                return 'You are logged out. Any unsaved changes will be lost.';
+            });
+            
+            // Method 7: Optimized history manipulation (disabled to prevent refresh loops)
+            // setInterval(function() {
+            //     // Keep pushing states to prevent back navigation
+            //     history.pushState({page: 'landing'}, '', location.href);
+            // }, 2000); // Disabled to prevent refresh loops
+            
+            // Method 8: Override history methods
+            const originalBack = history.back;
+            const originalGo = history.go;
+            
+            history.back = function() {
+                alert('Back navigation is disabled. You are logged out.');
+                return false;
+            };
+            
+            history.go = function(delta) {
+                if (delta < 0) {
+                    alert('Back navigation is disabled. You are logged out.');
+                    return false;
+                }
+                return originalGo.apply(history, arguments);
+            };
+        }
+
+        // Initialize back button prevention
+        preventBackButton();
+        
+        // Enhanced back button prevention for secure logouts (optimized)
+        <?php if (isset($_SESSION['secure_logout'])): ?>
+        (function() {
+            console.log('Secure logout detected - optimized back button prevention activated');
+            
+            // Store original methods
+            const originalBack = history.back;
+            const originalGo = history.go;
+            
+            // Override history methods once
+            history.back = function() {
+                alert('Back navigation is completely disabled. You are logged out.');
+                return false;
+            };
+            
+            history.go = function(delta) {
+                if (delta < 0) {
+                    alert('Back navigation is completely disabled. You are logged out.');
+                    return false;
+                }
+                return originalGo.apply(history, arguments);
+            };
+            
+            // Add event listeners once (not repeatedly)
+            document.addEventListener('keydown', function(e) {
+                if ([37, 38, 39, 40].includes(e.keyCode)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    alert('Navigation is disabled. You are logged out.');
+                    return false;
+                }
+            }, true);
+            
+            document.addEventListener('mouseup', function(e) {
+                if (e.button === 3 || e.button === 4) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    alert('Navigation is disabled. You are logged out.');
+                    return false;
+                }
+            }, true);
+            
+            // Lightweight history manipulation (disabled to prevent refresh loops)
+            // setInterval(function() {
+            //     history.pushState({page: 'landing', secure: true}, '', location.href);
+            // }, 1000); // Disabled to prevent refresh loops
+            
+            // Clear secure logout flag after 2 minutes (reduced time)
+            setTimeout(function() {
+                fetch('landing.php?clear_secure_logout=1', {method: 'POST'});
+            }, 120000);
+        })();
+        <?php endif; ?>
+        
+        // Additional aggressive back button prevention
+        (function() {
+            // Override the history object completely
+            const originalPushState = history.pushState;
+            const originalReplaceState = history.replaceState;
+            
+            history.pushState = function() {
+                originalPushState.apply(history, arguments);
+                // Push additional states to prevent back navigation
+                for (let i = 0; i < 10; i++) {
+                    originalPushState.call(history, {page: 'landing'}, '', location.href);
+                }
+            };
+            
+            history.replaceState = function() {
+                originalReplaceState.apply(history, arguments);
+                // Push additional states after replace
+                for (let i = 0; i < 10; i++) {
+                    originalPushState.call(history, {page: 'landing'}, '', location.href);
+                }
+            };
+            
+            // Override the back method
+            const originalBack = history.back;
+            history.back = function() {
+                alert('Back navigation is disabled. You are logged out.');
+                return false;
+            };
+            
+            // Override the go method
+            const originalGo = history.go;
+            history.go = function(delta) {
+                if (delta < 0) {
+                    alert('Back navigation is disabled. You are logged out.');
+                    return false;
+                }
+                return originalGo.apply(history, arguments);
+            };
+        })();
+        
+        // Page visibility API - detect if user tries to go back
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                // Page is hidden, user might be navigating away
+                setTimeout(function() {
+                    if (!document.hidden) {
+                        // Page is visible again, check if we're still on landing page
+                        if (location.pathname !== '/DMS/landing.php' && !location.href.includes('landing.php')) {
+                            alert('You are logged out. Redirecting to login page.');
+                            window.location.href = 'landing.php';
+                        }
+                    }
+                }, 100);
+            }
+        });
+        
+        // Additional event listeners for all possible back navigation
+        window.addEventListener('popstate', function(e) {
+            // This should already be handled by the main function, but add extra protection
+            alert('Back navigation is disabled. You are logged out.');
+            history.pushState({page: 'landing'}, '', location.href);
+        });
+        
+        // Disable all arrow keys
+        document.addEventListener('keydown', function(e) {
+            if ([37, 38, 39, 40].includes(e.keyCode)) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                if (e.keyCode === 37) {
+                    alert('Back navigation is disabled. You are logged out.');
+                }
+                return false;
+            }
+        }, true);
+        
+        // Final layer: Optimized URL monitoring (much less frequent)
+        let currentUrl = location.href;
+        setInterval(function() {
+            if (location.href !== currentUrl) {
+                // URL changed, check if it's not the landing page
+                if (!location.href.includes('landing.php')) {
+                    alert('You are logged out. Redirecting to login page.');
+                    window.location.href = 'landing.php';
+                }
+                currentUrl = location.href;
+            }
+        }, 3000); // Much reduced frequency for better performance
+        
+        // Debug: Log when left arrow is pressed
+        document.addEventListener('keydown', function(e) {
+            if (e.keyCode === 37) {
+                console.log('Left arrow pressed - should be blocked');
+                console.log('Event prevented:', e.defaultPrevented);
+            }
+        });
+        
+        // Additional test: Check if back button is actually working
+        console.log('Back button prevention initialized');
+        console.log('History length:', history.length);
+        
+        // Add loading indicator for login form
+        const loginForm = document.querySelector('form[action="landing.php"]');
+        if (loginForm) {
+            loginForm.addEventListener('submit', function() {
+                const loginBtn = document.getElementById('loginBtn');
+                const loginText = document.getElementById('loginText');
+                const loginSpinner = document.getElementById('loginSpinner');
+                
+                if (loginBtn && loginText && loginSpinner) {
+                    loginText.style.display = 'none';
+                    loginSpinner.style.display = 'inline';
+                    loginBtn.disabled = true;
                 }
             });
+        }
+
+        // Clear any cached data
+        if ('caches' in window) {
+            caches.keys().then(function(names) {
+                for (let name of names) {
+                    caches.delete(name);
+                }
+            });
+        }
+
+        // Force reload if user tries to navigate back
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                // Page was loaded from cache, force reload
+                window.location.reload();
+            }
         });
+
+        // Enroll modal controls
+        function openEnrollModal(){ enrollModal.classList.add('show'); }
+        function closeEnrollModal(){ enrollModal.classList.remove('show'); }
+        if (openEnroll) openEnroll.addEventListener('click', openEnrollModal);
+        if (closeEnroll) closeEnroll.addEventListener('click', closeEnrollModal);
+        enrollModal.addEventListener('click', (e)=>{ if(e.target === enrollModal) closeEnrollModal(); });
+
+        function openParentModal(){ parentModal.classList.add('show'); }
+        function closeParentModal(){ parentModal.classList.remove('show'); }
+        if (openParent) openParent.addEventListener('click', openParentModal);
+        if (closeParent) closeParent.addEventListener('click', closeParentModal);
+        parentModal.addEventListener('click', (e)=>{ if(e.target === parentModal) closeParentModal(); });
+    })();
     </script>
 </body>
 </html>
+
+

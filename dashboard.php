@@ -476,7 +476,7 @@ $recent_teachers = table_exists($conn, 'teachers')
                 </div>
                 
                 <div class="nav-item">
-                    <a href="index.php">
+                    <a href="admin_dashboard.php">
                         <i class="fas fa-users"></i>
                         Enrollees List
                     </a>
@@ -591,7 +591,7 @@ $recent_teachers = table_exists($conn, 'teachers')
                             <span><?php echo $pending_total; ?> pending applicant(s)</span>
                         </span>
                     </div>
-                    <a href="index.php" class="action-btn" style="padding:12px 18px;">
+                    <a href="admin_dashboard.php" class="action-btn" style="padding:12px 18px;">
                         <i class="fas fa-clipboard-check"></i>
                         Review Applications
                     </a>

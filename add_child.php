@@ -661,7 +661,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_students'])) {
                     </a>
                 </div>
                 <div class="nav-item">
-                    <a href="index.php">
+                    <a href="admin_dashboard.php">
                         <i class="fas fa-users"></i>
                         Students List
                     </a>
@@ -898,7 +898,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_students'])) {
 
                     <!-- Submit Buttons -->
                     <div class="button-row">
-                        <a href="index.php" class="back-btn">
+                        <a href="admin_dashboard.php" class="back-btn">
                             <i class="fas fa-arrow-left"></i>
                             Back to Students
                         </a>
