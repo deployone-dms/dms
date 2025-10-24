@@ -3,12 +3,18 @@ session_start();
 
 // Check if user is logged in and has admin access
 if (!isset($_SESSION['user_logged_in']) || $_SESSION['user_logged_in'] !== true) {
+    // Debug: Log session data before redirect
+    error_log("Official Students: Session check failed - user_logged_in: " . (isset($_SESSION['user_logged_in']) ? ($_SESSION['user_logged_in'] ? 'true' : 'false') : 'not set'));
+    error_log("Official Students: Full session data: " . print_r($_SESSION, true));
     header("Location: index.php");
     exit;
 }
 
 // Check if user has admin privileges (account_type 1 or 3)
 if (!isset($_SESSION['account_type']) || !in_array($_SESSION['account_type'], ['1', '3'])) {
+    // Debug: Log session data before redirect
+    error_log("Official Students: Account type check failed - account_type: " . (isset($_SESSION['account_type']) ? $_SESSION['account_type'] : 'not set'));
+    error_log("Official Students: Full session data: " . print_r($_SESSION, true));
     header("Location: index.php");
     exit;
 }
@@ -75,13 +81,13 @@ $result = $conn->query("SELECT * FROM students WHERE status='ACCEPTED' ORDER BY 
             </div>
             <nav class="sidebar-nav">
                 <div class="nav-item">
-                    <a href="dashboard.php">
+                    <a href="admin_dashboard.php">
                         <i class="fas fa-tachometer-alt"></i>
                         Dashboard
                     </a>
                 </div>
                 <div class="nav-item">
-                    <a href="index.php">
+                    <a href="admin_dashboard.php">
                         <i class="fas fa-users"></i>
                         Enrollees List
                     </a>

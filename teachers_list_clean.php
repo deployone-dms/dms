@@ -583,7 +583,7 @@ function deriveCityCode($address) {
             </div>
             <nav class="sidebar-nav">
                 <div class="nav-item">
-                    <a href="dashboard.php">
+                    <a href="admin_dashboard.php">
                         <i class="fas fa-tachometer-alt"></i>
                         Dashboard
                     </a>
