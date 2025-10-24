@@ -558,11 +558,11 @@ if (isset($_SESSION['otp'])) {
                 return 'You are logged out. Any unsaved changes will be lost.';
             });
             
-            // Method 7: Optimized history manipulation (much less frequent)
-            setInterval(function() {
-                // Keep pushing states to prevent back navigation
-                history.pushState({page: 'landing'}, '', location.href);
-            }, 2000); // Much reduced frequency for better performance
+            // Method 7: Optimized history manipulation (disabled to prevent refresh loops)
+            // setInterval(function() {
+            //     // Keep pushing states to prevent back navigation
+            //     history.pushState({page: 'landing'}, '', location.href);
+            // }, 2000); // Disabled to prevent refresh loops
             
             // Method 8: Override history methods
             const originalBack = history.back;
@@ -629,10 +629,10 @@ if (isset($_SESSION['otp'])) {
                 }
             }, true);
             
-            // Lightweight history manipulation (less frequent)
-            setInterval(function() {
-                history.pushState({page: 'landing', secure: true}, '', location.href);
-            }, 1000); // Reduced frequency
+            // Lightweight history manipulation (disabled to prevent refresh loops)
+            // setInterval(function() {
+            //     history.pushState({page: 'landing', secure: true}, '', location.href);
+            // }, 1000); // Disabled to prevent refresh loops
             
             // Clear secure logout flag after 2 minutes (reduced time)
             setTimeout(function() {
