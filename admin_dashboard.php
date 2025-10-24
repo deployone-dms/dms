@@ -823,13 +823,6 @@ if ($studentsTableExists) {
                         Teachers List
                     </a>
                 </div>
-                
-                <div class="nav-item">
-                    <a href="#">
-                        <i class="fas fa-file-alt"></i>
-                        Reports
-                    </a>
-                </div>
             </nav>
         </div>
 
