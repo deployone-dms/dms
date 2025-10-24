@@ -24,17 +24,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['link_student_id'])) {
             $stmt->execute();
             $res = $stmt->get_result();
             if ($res && $res->num_rows === 1) {
-                $ins = $conn->prepare("INSERT IGNORE INTO parent_students (parent_id, student_id, relation) VALUES (?,?,?)");
-                if ($ins) {
-                    $ins->bind_param('iis', $parent_id, $sid, $relation);
-                    if ($ins->execute()) {
-                        $link_success = 'Child linked to your account.';
+                try {
+                    $ins = $conn->prepare("INSERT IGNORE INTO parent_students (parent_id, student_id, relation) VALUES (?,?,?)");
+                    if ($ins) {
+                        $ins->bind_param('iis', $parent_id, $sid, $relation);
+                        if ($ins->execute()) {
+                            $link_success = 'Child linked to your account.';
+                        } else {
+                            $link_error = 'Could not link at this time.';
+                        }
+                        $ins->close();
                     } else {
-                        $link_error = 'Could not link at this time.';
+                        $link_error = 'Could not prepare link action.';
                     }
-                    $ins->close();
-                } else {
-                    $link_error = 'Could not prepare link action.';
+                } catch (Exception $e) {
+                    $link_error = 'Database table not ready. Please contact administrator.';
                 }
             } else {
                 $link_error = 'No active student matches that ID and last name.';
@@ -48,8 +52,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['link_student_id'])) {
 
 // Load linked students
 $students = [];
-$q = $conn->prepare("SELECT s.id, s.first_name, s.last_name, s.picture FROM parent_students ps JOIN students s ON s.id = ps.student_id WHERE ps.parent_id = ? AND s.archived = 0 ORDER BY s.last_name, s.first_name");
-if ($q) { $q->bind_param('i', $parent_id); $q->execute(); $res = $q->get_result(); while($row=$res->fetch_assoc()){ $students[]=$row; } $q->close(); }
+try {
+    $q = $conn->prepare("SELECT s.id, s.first_name, s.last_name, s.picture FROM parent_students ps JOIN students s ON s.id = ps.student_id WHERE ps.parent_id = ? AND s.archived = 0 ORDER BY s.last_name, s.first_name");
+    if ($q) { 
+        $q->bind_param('i', $parent_id); 
+        $q->execute(); 
+        $res = $q->get_result(); 
+        while($row=$res->fetch_assoc()){ 
+            $students[]=$row; 
+        } 
+        $q->close(); 
+    }
+} catch (Exception $e) {
+    // Table doesn't exist yet, students array will be empty
+    $students = [];
+}
 
 // Optionally load latest progress summary per student (example: grossmotor_submissions)
 function load_latest_grossmotor($conn, $student_id) {
