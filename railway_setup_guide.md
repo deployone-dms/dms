@@ -20,7 +20,7 @@ Add these environment variables manually:
 MYSQL_HOST=maglev.proxy.rlwy.net
 MYSQL_USER=root
 MYSQL_PASSWORD=nKTmUIKDoUruBImSWBzVxtrahKJMMDtQ
-MYSQL_DATABASE=railway
+MYSQL_DATABASE=daycare_db
 MYSQL_PORT=20122
 ```
 
@@ -48,7 +48,7 @@ railway link
 railway variables set MYSQL_HOST=maglev.proxy.rlwy.net
 railway variables set MYSQL_USER=root
 railway variables set MYSQL_PASSWORD=nKTmUIKDoUruBImSWBzVxtrahKJMMDtQ
-railway variables set MYSQL_DATABASE=railway
+railway variables set MYSQL_DATABASE=daycare_db
 railway variables set MYSQL_PORT=20122
 ```
 
