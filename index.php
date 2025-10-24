@@ -1,4 +1,8 @@
 <?php
+// Auto-setup database on first load
+include 'auto_setup_database.php';
+setupDatabase();
+
 include 'db.php';
 // Lightweight JSON endpoint to fetch a student's document file paths
 if (isset($_GET['fetch_docs']) && isset($_GET['id'])) {
