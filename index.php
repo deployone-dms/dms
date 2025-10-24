@@ -78,18 +78,26 @@ if (isset($_SESSION['otp'])) {
             // Set proper session flag for security
             $_SESSION['user_logged_in'] = true;
             $_SESSION['login_time'] = time();
+            $_SESSION['user_id'] = $row['id'];
+            $_SESSION['user_email'] = $email;
+            $_SESSION['user_name'] = $email; // You can modify this to get actual name from database
+            $_SESSION['account_type'] = $db_acc_type;
+            
             // Clear recent logout flags so guards don't bounce an authenticated user
             unset($_SESSION['fresh_logout'], $_SESSION['logout_timestamp'], $_SESSION['secure_logout']);
             
             switch($db_acc_type) {
                 case '1': // Admin
-                    header("Location: index.php");
+                    header("Location: admin_dashboard.php");
                     break;
                 case '2': // User/Parent
+                    // Set parent-specific session variables
+                    $_SESSION['parent_id'] = $row['id'];
+                    $_SESSION['parent_name'] = $email; // You can modify this to get actual name
                     header("Location: parent_dashboard.php");
                     break;
                 case '3': // Supervisor
-                    header("Location: index.php");
+                    header("Location: admin_dashboard.php");
                     break;
                 case '4': // Staff/Teacher
                     header("Location: index2.php");
