@@ -8,7 +8,7 @@ return [
     ],
     'email' => [
         'smtp_host' => getenv('SMTP_HOST') ?: 'smtp.gmail.com',
-        'smtp_port' => getenv('SMTP_PORT') ?: 587,
+        'smtp_port' => (int)(getenv('SMTP_PORT') ?: 587),
         'smtp_username' => getenv('SMTP_USERNAME') ?: 'jheyjheypogi30@gmail.com',
         'smtp_password' => getenv('SMTP_PASSWORD') ?: 'rudolvpyhkjasvqn',
         'smtp_encryption' => getenv('SMTP_ENCRYPTION') ?: 'tls',

@@ -55,15 +55,26 @@ class OTPService {
             
             // Server settings
             $mail->isSMTP();
-            $mail->Host = $this->config['smtp']['host'];
+            $mail->Host = $this->config['email']['smtp_host'];
             $mail->SMTPAuth = true;
-            $mail->Username = $this->config['smtp']['username'];
-            $mail->Password = $this->config['smtp']['password'];
-            $mail->SMTPSecure = $this->config['smtp']['encryption'];
-            $mail->Port = $this->config['smtp']['port'];
+            $mail->Username = $this->config['email']['smtp_username'];
+            $mail->Password = $this->config['email']['smtp_password'];
+            $mail->SMTPSecure = $this->config['email']['smtp_encryption'];
+            $mail->Port = $this->config['email']['smtp_port'];
+            
+            // Timeout settings
+            $mail->Timeout = 30;
+            $mail->SMTPKeepAlive = true;
+            $mail->SMTPOptions = array(
+                'ssl' => array(
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true
+                )
+            );
             
             // Recipients
-            $mail->setFrom($this->config['from']['email'], $this->config['from']['name']);
+            $mail->setFrom($this->config['email']['from_email'], $this->config['email']['from_name']);
             $mail->addAddress($email);
             
             // Content
@@ -79,9 +90,12 @@ class OTPService {
             ];
             
         } catch (Exception $e) {
+            // Log the error for debugging
+            error_log("OTP Send Error: " . $e->getMessage());
+            
             return [
                 'success' => false,
-                'message' => 'Failed to send OTP: ' . $mail->ErrorInfo
+                'message' => 'OTP could not be sent. Mailer Error: ' . $e->getMessage()
             ];
         }
     }
@@ -100,7 +114,7 @@ class OTPService {
             $row = $result->fetch_assoc();
             
             // Check attempts
-            if ($row['attempts'] >= $this->config['otp']['attempts']) {
+            if ($row['attempts'] >= $this->config['otp']['max_attempts']) {
                 return [
                     'success' => false,
                     'message' => 'Maximum verification attempts exceeded'

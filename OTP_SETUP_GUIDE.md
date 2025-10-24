@@ -1,163 +1,173 @@
-# OTP Setup Guide for Yakap Daycare Management System
+# OTP Setup Guide for Yakap Daycare Center
 
-## 📧 Email Configuration
+## Overview
+This guide will help you set up the OTP (One-Time Password) email functionality for the Yakap Daycare Center management system.
 
-### Step 1: Configure Email Settings
-Edit the file `otp_config.php` and update the following settings:
+## Prerequisites
+- PHP 8.1 or higher
+- Composer installed
+- SMTP email service (Gmail, Outlook, etc.)
 
-```php
-'smtp' => [
-    'host' => 'smtp.gmail.com', // Your SMTP server
-    'port' => 587,
-    'username' => 'your-email@gmail.com', // Your email address
-    'password' => 'your-app-password', // Your app password
-    'encryption' => 'tls'
-],
-'from' => [
-    'email' => 'your-email@gmail.com', // Your email address
-    'name' => 'Yakap Daycare Center'
-]
+## Installation Steps
+
+### 1. Install Dependencies
+```bash
+composer install
 ```
 
-### Step 2: Gmail Setup (Recommended)
+### 2. Environment Variables Setup
+
+Create a `.env` file in your project root with the following variables:
+
+```env
+# Database Configuration
+DB_HOST=your_database_host
+DB_USERNAME=your_database_username
+DB_PASSWORD=your_database_password
+DB_DATABASE=your_database_name
+DB_PORT=your_database_port
+
+# SMTP Email Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+SMTP_ENCRYPTION=tls
+FROM_EMAIL=your_email@gmail.com
+FROM_NAME=Yakap Daycare Center
+```
+
+### 3. Gmail Setup (Recommended)
+
+If using Gmail, follow these steps:
 
 1. **Enable 2-Factor Authentication** on your Gmail account
-2. **Generate App Password**:
+2. **Generate an App Password**:
    - Go to Google Account settings
    - Security → 2-Step Verification → App passwords
    - Generate a new app password for "Mail"
-   - Use this password in `otp_config.php`
+   - Use this password in your `SMTP_PASSWORD` environment variable
 
-### Step 3: Alternative Email Providers
-
-#### Outlook/Hotmail:
-```php
-'host' => 'smtp-mail.outlook.com',
-'port' => 587,
-'encryption' => 'tls'
+3. **Update your .env file**:
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_gmail@gmail.com
+SMTP_PASSWORD=your_16_character_app_password
+SMTP_ENCRYPTION=tls
+FROM_EMAIL=your_gmail@gmail.com
+FROM_NAME=Yakap Daycare Center
 ```
 
-#### Yahoo:
-```php
-'host' => 'smtp.mail.yahoo.com',
-'port' => 587,
-'encryption' => 'tls'
+### 4. Alternative Email Providers
+
+#### Outlook/Hotmail
+```env
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_ENCRYPTION=tls
 ```
 
-#### Custom SMTP:
-```php
-'host' => 'your-smtp-server.com',
-'port' => 587, // or 465 for SSL
-'encryption' => 'tls' // or 'ssl'
+#### Yahoo Mail
+```env
+SMTP_HOST=smtp.mail.yahoo.com
+SMTP_PORT=587
+SMTP_ENCRYPTION=tls
 ```
 
-## 🔧 System Configuration
+## Testing the Setup
 
-### Step 4: Database Setup
-The OTP system will automatically create the required table `otp_verification` when first accessed.
+### 1. Run the Test Script
+```bash
+php test_otp.php
+```
 
-### Step 5: Test the System
-1. Go to `test.php`
-2. Enter a registered email address
-3. Click "Send OTP"
-4. Check your email for the OTP code
-5. Enter the OTP in the verification page
-6. Complete login with your password
+### 2. Manual Testing
+1. Navigate to your application
+2. Try to register a new parent account
+3. Check if OTP email is received
+4. Verify the OTP code works
 
-## 📱 How It Works
+## Troubleshooting
 
-### Login Flow:
-1. **Step 1**: User enters email → System sends OTP
-2. **Step 2**: User verifies OTP → Redirected to password entry
-3. **Step 3**: User enters password → Login successful
+### Common Issues
 
-### Security Features:
-- ✅ OTP expires in 5 minutes
-- ✅ Maximum 3 verification attempts
-- ✅ Previous OTPs are invalidated when new one is sent
-- ✅ Email validation before sending OTP
-- ✅ Session-based verification tracking
+#### 1. "SMTP Error: Could not connect to SMTP host"
+- **Solution**: Check your SMTP_HOST and SMTP_PORT settings
+- **For Gmail**: Ensure you're using `smtp.gmail.com` and port `587`
 
-## 🛠️ Troubleshooting
+#### 2. "Authentication failed"
+- **Solution**: 
+  - For Gmail: Use App Password instead of regular password
+  - Check SMTP_USERNAME and SMTP_PASSWORD
+  - Ensure 2FA is enabled for Gmail
 
-### Common Issues:
+#### 3. "Connection timed out"
+- **Solution**: 
+  - Check firewall settings
+  - Try different SMTP ports (465 for SSL, 587 for TLS)
+  - Contact your hosting provider about SMTP restrictions
 
-#### 1. "Failed to send OTP" Error
-- Check email credentials in `otp_config.php`
-- Verify SMTP settings
-- Check if 2FA is enabled for Gmail
-- Ensure app password is correct
+#### 4. "SSL/TLS connection failed"
+- **Solution**: 
+  - Try changing SMTP_ENCRYPTION to 'ssl' and port to 465
+  - Or use 'tls' with port 587
 
-#### 2. OTP Not Received
-- Check spam/junk folder
-- Verify email address is correct
-- Check SMTP server status
-- Try different email provider
+### Debug Mode
 
-#### 3. "Invalid or expired OTP" Error
-- Check if OTP is still valid (5 minutes)
-- Verify correct 6-digit code
-- Check if maximum attempts exceeded
-
-### Debug Mode:
-Add this to `otp_service.php` for debugging:
+To enable debug mode, add this to your PHP code:
 ```php
 $mail->SMTPDebug = 2; // Enable verbose debug output
+$mail->Debugoutput = 'html';
 ```
 
-## 📋 Files Created/Modified
+## Security Notes
 
-### New Files:
-- `otp_config.php` - Email configuration
-- `otp_service.php` - OTP functionality
-- `otp_verification.php` - OTP verification page
-- `vendor/` - PHPMailer library (via Composer)
+1. **Never commit .env files** to version control
+2. **Use App Passwords** instead of main account passwords
+3. **Regularly rotate** your email credentials
+4. **Monitor** email sending limits
 
-### Modified Files:
-- `test.php` - Updated with OTP integration
+## Production Deployment
 
-## 🔒 Security Notes
+### Railway/Heroku
+Set environment variables in your hosting platform:
+```bash
+# Example for Railway
+railway variables set SMTP_HOST=smtp.gmail.com
+railway variables set SMTP_PORT=587
+railway variables set SMTP_USERNAME=your_email@gmail.com
+railway variables set SMTP_PASSWORD=your_app_password
+railway variables set SMTP_ENCRYPTION=tls
+railway variables set FROM_EMAIL=your_email@gmail.com
+railway variables set FROM_NAME=Yakap Daycare Center
+```
 
-1. **Never commit** `otp_config.php` to version control
-2. **Use environment variables** for production
-3. **Regularly rotate** email passwords
-4. **Monitor** OTP usage for suspicious activity
-5. **Set up rate limiting** for OTP requests
+### Vercel
+Add environment variables in Vercel dashboard or vercel.json:
+```json
+{
+  "env": {
+    "SMTP_HOST": "smtp.gmail.com",
+    "SMTP_PORT": "587",
+    "SMTP_USERNAME": "your_email@gmail.com",
+    "SMTP_PASSWORD": "your_app_password",
+    "SMTP_ENCRYPTION": "tls",
+    "FROM_EMAIL": "your_email@gmail.com",
+    "FROM_NAME": "Yakap Daycare Center"
+  }
+}
+```
 
-## 📞 Support
+## Support
 
 If you encounter issues:
-1. Check the error messages in the browser
-2. Check PHP error logs
-3. Verify email configuration
-4. Test with a simple email first
+1. Check the error logs in your application
+2. Verify all environment variables are set correctly
+3. Test with a simple email client first
+4. Contact your hosting provider for SMTP restrictions
 
-## 🎯 Next Steps
-
-1. Configure your email settings
-2. Test the OTP system
-3. Customize the email template if needed
-4. Add rate limiting for production use
-5. Consider adding SMS OTP as backup
-
----
-
-**Note**: This OTP system is now fully integrated with your existing login system. Users must verify their email before they can complete the login process.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## Files Modified
+- `otp_service.php` - Fixed configuration key mismatches
+- `otp_config.php` - Improved environment variable handling
+- `test_otp.php` - Created test script for OTP functionality
