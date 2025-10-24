@@ -25,7 +25,7 @@ $whereSql = '';
 if ($search !== '') {
     $safe = $conn->real_escape_string($search);
     $like = "'%$safe%'";
-    $whereSql = "WHERE Name LIKE $like OR Contact LIKE $like OR Address LIKE $like OR District LIKE $like OR Daycare_Center LIKE $like OR Barangay LIKE $like";
+    $whereSql = "WHERE (Name LIKE $like OR name LIKE $like) OR (Contact LIKE $like OR phone LIKE $like) OR (Address LIKE $like OR address LIKE $like) OR District LIKE $like OR Daycare_Center LIKE $like OR Barangay LIKE $like";
 }
 
 $totalRes = $conn->query("SELECT COUNT(*) AS total FROM teachers $whereSql");
@@ -34,6 +34,19 @@ $total = (int)$totalRow['total'];
 $totalPages = max(1, (int)ceil($total / $perPage));
 
 $result = $conn->query("SELECT * FROM teachers $whereSql ORDER BY ID DESC LIMIT $perPage OFFSET $offset");
+
+// Debug: Check if query failed
+if (!$result) {
+    die("Query failed: " . $conn->error);
+}
+
+// Debug: Check what columns are available (remove this after fixing)
+if ($result && $result->num_rows > 0) {
+    $firstRow = $result->fetch_assoc();
+    $result->data_seek(0); // Reset pointer
+    // Uncomment the line below to see available columns
+    // error_log("Available columns: " . print_r(array_keys($firstRow), true));
+}
 
 $showStart = $total > 0 ? ($offset + 1) : 0;
 $showEnd = min($offset + $perPage, $total);
@@ -685,29 +698,29 @@ function deriveCityCode($address) {
                                     <td>
                                         <div class="teacher-info">
                                             <div class="teacher-avatar">
-                                                <?php echo strtoupper(substr($row['Name'], 0, 2)); ?>
+                                                <?php echo strtoupper(substr($row['Name'] ?? $row['name'] ?? 'N/A', 0, 2)); ?>
                                             </div>
                                             <div class="teacher-details">
-                                                <h3><?php echo htmlspecialchars($row['Name']); ?></h3>
-                                                <p>ID: <?php echo $row['ID']; ?></p>
+                                                <h3><?php echo htmlspecialchars($row['Name'] ?? $row['name'] ?? 'N/A'); ?></h3>
+                                                <p>ID: <?php echo $row['ID'] ?? $row['id'] ?? 'N/A'; ?></p>
                                             </div>
                                         </div>
                                     </td>
-                                    <td><?php echo htmlspecialchars($row['Contact']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['Address']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['District']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['Daycare_Center']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['Barangay']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['Contact'] ?? $row['phone'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($row['Address'] ?? $row['address'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($row['District'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($row['Daycare_Center'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($row['Barangay'] ?? 'N/A'); ?></td>
                                     <td>
                                         <span class="status-badge status-active">Active</span>
                                     </td>
                                     <td>
                                         <div class="action-buttons">
-                                            <a href="edit_teacher.php?id=<?php echo $row['ID']; ?>" class="btn-action btn-edit">
+                                            <a href="edit_teacher.php?id=<?php echo $row['ID'] ?? $row['id'] ?? ''; ?>" class="btn-action btn-edit">
                                                 <i class="fas fa-edit"></i>
                                                 Edit
                                             </a>
-                                            <a href="delete_teacher.php?id=<?php echo $row['ID']; ?>" class="btn-action btn-delete" onclick="return confirm('Are you sure you want to delete this teacher?')">
+                                            <a href="delete_teacher.php?id=<?php echo $row['ID'] ?? $row['id'] ?? ''; ?>" class="btn-action btn-delete" onclick="return confirm('Are you sure you want to delete this teacher?')">
                                                 <i class="fas fa-trash"></i>
                                                 Delete
                                             </a>
