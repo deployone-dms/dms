@@ -21,4 +21,4 @@ cmds = [
 ]
 
 [start]
-cmd = "apache2-foreground"
+cmd = "/nix/var/nix/profiles/default/bin/httpd -f /nix/store/*-httpd-*/conf/httpd.conf -DFOREGROUND"
