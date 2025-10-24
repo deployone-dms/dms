@@ -37,14 +37,17 @@ RUN chown -R www-data:www-data /var/www/html \
     && [ -d "/var/www/html/bootstrap/cache" ] && chmod -R 755 /var/www/html/bootstrap/cache || true
 
 # Configure Apache to use PORT environment variable
-RUN echo 'Listen ${PORT}' > /etc/apache2/ports.conf
-RUN echo '<VirtualHost *:${PORT}>
-    DocumentRoot /var/www/html
-    <Directory "/var/www/html">
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
+RUN echo 'Listen 8080' > /etc/apache2/ports.conf
+RUN echo 'Listen 80' >> /etc/apache2/ports.conf
+
+# Create Apache configuration
+RUN echo '<VirtualHost *:8080>\
+    DocumentRoot /var/www/html\
+    <Directory "/var/www/html">\
+        Options Indexes FollowSymLinks\
+        AllowOverride All\
+        Require all granted\
+    </Directory>\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
 # Expose the port the app runs on
