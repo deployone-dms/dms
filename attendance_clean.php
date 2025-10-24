@@ -1,7 +1,11 @@
 <?php
 include 'db.php';
 // Ensure status column exists and limit attendance list to accepted students only
-$conn->query("ALTER TABLE students ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
+// Check if status column exists before adding
+$statusCheck = $conn->query("SHOW COLUMNS FROM students LIKE 'status'");
+if ($statusCheck->num_rows == 0) {
+    $conn->query("ALTER TABLE students ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
+}
 $result = $conn->query("SELECT * FROM students WHERE status='ACCEPTED' ORDER BY id DESC");
 
 // Create attendance table if not exists

@@ -2,7 +2,11 @@
 include 'db.php';
 
 // Ensure status column exists
-$conn->query("ALTER TABLE students ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
+// Check if status column exists before adding
+$statusCheck = $conn->query("SHOW COLUMNS FROM students LIKE 'status'");
+if ($statusCheck->num_rows == 0) {
+    $conn->query("ALTER TABLE students ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
+}
 
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 if ($id > 0) {
