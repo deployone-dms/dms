@@ -125,7 +125,7 @@
         <p class="subtitle">Setting up required tables for Yakap Daycare Management System</p>
         
         <?php
-        include("connection.php");
+        include("db.php");
         
         $errors = [];
         $success = [];

@@ -1,6 +1,6 @@
 <?php
 // Setup script to create login_table
-include("connection.php");
+include("db.php");
 
 // Create login_table
 $sql = "CREATE TABLE IF NOT EXISTS `login_table` (

@@ -1,6 +1,6 @@
 <?php
 session_start();
-include("connection.php");
+include("db.php");
 
 // Security headers to prevent caching
 header("Cache-Control: no-cache, no-store, must-revalidate");

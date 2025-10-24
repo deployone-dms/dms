@@ -1,6 +1,6 @@
 <?php
 session_start();
-include("connection.php");
+include("db.php");
 include("otp_service.php");
 
 $email = $password = "";
