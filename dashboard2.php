@@ -507,7 +507,7 @@ $recent_teachers = table_exists($conn, 'teachers')
             </div>
             <nav class="sidebar-nav">
                 <div class="nav-item">
-                    <a href="dashboard.php" class="active">
+                    <a href="dashboard2.php" class="active">
                         <i class="fas fa-tachometer-alt"></i>
                         Dashboard
                     </a>
@@ -529,13 +529,6 @@ $recent_teachers = table_exists($conn, 'teachers')
                     <a href="attendance_clean.php">
                         <i class="fas fa-calendar-check"></i>
                         Attendance
-                    </a>
-                </div>
-                
-                <div class="nav-item">
-                    <a href="#">
-                        <i class="fas fa-file-alt"></i>
-                        Reports
                     </a>
                 </div>
             </nav>

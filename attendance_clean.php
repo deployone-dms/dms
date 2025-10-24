@@ -622,12 +622,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['ac
                         Attendance
                     </a>
                 </div>
-                <div class="nav-item">
-                    <a href="#">
-                        <i class="fas fa-file-alt"></i>
-                        Reports
-                    </a>
-                </div>
             </nav>
         </div>
 
