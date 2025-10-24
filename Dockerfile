@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
+    git \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
 # Enable Apache modules
@@ -16,28 +17,34 @@ RUN a2enmod rewrite headers
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy application files
-COPY . .
+# Copy only composer files first to leverage Docker cache
+COPY composer.* ./
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install dependencies (no dev dependencies for production)
-RUN composer install --no-dev --optimize-autoloader
+RUN if [ -f "composer.json" ]; then \
+    composer install --no-dev --optimize-autoloader --no-interaction; \
+    fi
+
+# Copy the rest of the application
+COPY . .
 
 # Set file permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
+    && [ -d "/var/www/html/bootstrap/cache" ] && chmod -R 755 /var/www/html/bootstrap/cache || true
 
 # Configure Apache to use PORT environment variable
 RUN echo 'Listen ${PORT}' > /etc/apache2/ports.conf
-RUN echo '<VirtualHost *:${PORT}>\n\
-    DocumentRoot /var/www/html\n\
-    <Directory "/var/www/html">\n\
-        AllowOverride All\n\
-        Require all granted\n\
-    </Directory>\n\
+RUN echo '<VirtualHost *:${PORT}>
+    DocumentRoot /var/www/html
+    <Directory "/var/www/html">
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
 # Expose the port the app runs on
