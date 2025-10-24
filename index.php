@@ -72,13 +72,20 @@ if (isset($_SESSION['otp'])) {
             $otpErr = "OTP is required";
         } elseif ($otp == $_SESSION['otp']) {
             // OTP correct, login successful
-            $db_acc_type = $_SESSION['account_type'];
-            unset($_SESSION['otp'], $_SESSION['email'], $_SESSION['account_type']);
+            $db_acc_type = $_SESSION['account_type'] ?? '';
+            $user_data = $_SESSION['user_data'] ?? [];
+            $email = $_SESSION['email'] ?? '';
+            
+            // Validate session data
+            if (empty($user_data) || empty($email) || empty($db_acc_type)) {
+                $otpErr = "Session expired. Please login again.";
+            } else {
+                unset($_SESSION['otp'], $_SESSION['email'], $_SESSION['account_type'], $_SESSION['user_data']);
             
             // Set proper session flag for security
             $_SESSION['user_logged_in'] = true;
             $_SESSION['login_time'] = time();
-            $_SESSION['user_id'] = $row['id'];
+            $_SESSION['user_id'] = $user_data['id'];
             $_SESSION['user_email'] = $email;
             $_SESSION['user_name'] = $email; // You can modify this to get actual name from database
             $_SESSION['account_type'] = $db_acc_type;
@@ -92,7 +99,7 @@ if (isset($_SESSION['otp'])) {
                     break;
                 case '2': // User/Parent
                     // Set parent-specific session variables
-                    $_SESSION['parent_id'] = $row['id'];
+                    $_SESSION['parent_id'] = $user_data['id'];
                     $_SESSION['parent_name'] = $email; // You can modify this to get actual name
                     header("Location: parent_dashboard.php");
                     break;
@@ -104,6 +111,7 @@ if (isset($_SESSION['otp'])) {
                     break;
             }
             exit;
+            }
         } else {
             $otpErr = "Incorrect OTP";
         }
@@ -133,6 +141,7 @@ if (isset($_SESSION['otp'])) {
                 $_SESSION['otp'] = $otp;
                 $_SESSION['email'] = $email;
                 $_SESSION['account_type'] = $row["account_type"];
+                $_SESSION['user_data'] = $row; // Store user data for OTP verification
 
                 // Send OTP using Brevo email service
                 $emailService = new EmailService();
