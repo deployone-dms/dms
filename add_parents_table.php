@@ -1,8 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Parents Table</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
 <?php
 // Quick script to add the missing parents table
+echo "<h2>Adding Parents Table</h2>";
+
+// Check if db.php exists
+if (!file_exists('db.php')) {
+    echo "<p class='error'>❌ db.php file not found!</p>";
+    exit;
+}
+
 include 'db.php';
 
-echo "<h2>Adding Parents Table</h2>";
+// Check if connection exists
+if (!isset($conn)) {
+    echo "<p class='error'>❌ Database connection not established!</p>";
+    exit;
+}
+
+// Test connection
+if ($conn->connect_error) {
+    echo "<p class='error'>❌ Database connection failed: " . $conn->connect_error . "</p>";
+    exit;
+}
+
+echo "<p class='info'>✅ Database connection successful!</p>";
 
 try {
     // Check if parents table already exists
@@ -51,3 +83,5 @@ try {
 
 $conn->close();
 ?>
+</body>
+</html>
