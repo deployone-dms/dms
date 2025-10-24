@@ -160,6 +160,18 @@ function setupDatabase() {
                 PRIMARY KEY (`id`),
                 KEY `email` (`email`),
                 KEY `otp_code` (`otp_code`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+            
+            'parents' => "CREATE TABLE IF NOT EXISTS `parents` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `email` varchar(255) NOT NULL,
+                `password_hash` varchar(255) NOT NULL,
+                `full_name` varchar(255) NOT NULL,
+                `phone` varchar(50) DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+                `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `email` (`email`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
         ];
         
