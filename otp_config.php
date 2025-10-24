@@ -9,10 +9,10 @@ return [
     'email' => [
         'smtp_host' => getenv('SMTP_HOST') ?: 'smtp.gmail.com',
         'smtp_port' => getenv('SMTP_PORT') ?: 587,
-        'smtp_username' => getenv('SMTP_USERNAME') ?: '',
-        'smtp_password' => getenv('SMTP_PASSWORD') ?: '',
+        'smtp_username' => getenv('SMTP_USERNAME') ?: 'jheyjheypogi30@gmail.com',
+        'smtp_password' => getenv('SMTP_PASSWORD') ?: 'rudolvpyhkjasvqn',
         'smtp_encryption' => getenv('SMTP_ENCRYPTION') ?: 'tls',
-        'from_email' => getenv('FROM_EMAIL') ?: 'noreply@yakapdaycare.com',
+        'from_email' => getenv('FROM_EMAIL') ?: 'jheyjheypogi30@gmail.com',
         'from_name' => getenv('FROM_NAME') ?: 'Yakap Daycare Center'
     ],
     'security' => [
