@@ -23,9 +23,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $District = $_POST['District'];
     $Daycare_Center = $_POST['Daycare_Center'];
     $Barangay = $_POST['Barangay'];
+    $Email = $_POST['Email'];
 
     if (!preg_match('/^\+?[0-9\s\-]+$/', $Contact)) {
         die("Invalid phone number format.");
+    }
+
+    // Validate email format
+    if (!filter_var($Email, FILTER_VALIDATE_EMAIL)) {
+        die("Invalid email format.");
     }
 
     // Validate district is one of 1-6
@@ -35,11 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     // Use prepared statements to prevent SQL injection
-    $stmt = $conn->prepare("INSERT INTO teachers (Name, Contact, Address, District, Daycare_Center, Barangay) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO teachers (Name, Contact, Address, District, Daycare_Center, Barangay, email) VALUES (?, ?, ?, ?, ?, ?, ?)");
     if (!$stmt) {
         die("Prepare failed: " . $conn->error);
     }
-    $stmt->bind_param("ssssss", $Name, $Contact, $Address, $District, $Daycare_Center, $Barangay);
+    $stmt->bind_param("sssssss", $Name, $Contact, $Address, $District, $Daycare_Center, $Barangay, $Email);
     $stmt->execute();
     $stmt->close();
 
@@ -496,6 +502,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         </div>
 
                         <div class="form-group full-width">
+                            <label for="Email">Email Address *</label>
+                            <input type="email" id="Email" name="Email" required placeholder="Enter teacher's email address">
+                        </div>
+
+                        <div class="form-group full-width">
                             <label for="Address">Address *</label>
                             <input type="text" id="Address" name="Address" required placeholder="Enter complete address">
                         </div>
@@ -576,11 +587,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         document.getElementById('teacherForm').addEventListener('submit', function (e) {
             const contactInput = document.querySelector('input[name="Contact"]');
             const contactValue = contactInput.value;
+            const emailInput = document.querySelector('input[name="Email"]');
+            const emailValue = emailInput.value;
 
             const phoneRegex = /^\+?[0-9\s\-]+$/;
             if (!phoneRegex.test(contactValue)) {
                 alert("Please enter a valid phone number.");
                 e.preventDefault(); // Prevent form submission
+                return;
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(emailValue)) {
+                alert("Please enter a valid email address.");
+                e.preventDefault(); // Prevent form submission
+                return;
             }
         });
 
