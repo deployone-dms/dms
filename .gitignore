@@ -1,0 +1,39 @@
+# Sensitive files - DO NOT COMMIT
+connection.php
+db.php
+
+# Uploaded files
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.pdf
+*.jfif
+
+# Vendor dependencies
+vendor/
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+error_log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Database dumps (optional - uncomment if you don't want to commit SQL files)
+# *.sql

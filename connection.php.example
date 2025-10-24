@@ -1,0 +1,10 @@
+<?php 
+    // Database Configuration
+    // Copy this file to connection.php and update with your credentials
+    
+    $Connection = new mysqli("localhost", "root", "", "daycare_db", 3306);
+    
+    if ($Connection->connect_error) {
+        die("Connection failed: " . $Connection->connect_error);
+    }
+?>
