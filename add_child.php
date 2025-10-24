@@ -7,12 +7,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo "<strong>🔍 DEBUG INFO:</strong><br>";
     echo "POST method received: " . ($_SERVER['REQUEST_METHOD'] === 'POST' ? 'YES' : 'NO') . "<br>";
     echo "submit_students button clicked: " . (isset($_POST['submit_students']) ? 'YES' : 'NO') . "<br>";
+    echo "All POST keys: " . implode(', ', array_keys($_POST)) . "<br>";
     echo "POST data: <pre>" . print_r($_POST, true) . "</pre>";
+    echo "FILES data: <pre>" . print_r($_FILES, true) . "</pre>";
     echo "</div>";
 }
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_students'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['submit_students']) || !empty($_POST['first_name']))) {
     echo "<div style='background: #d4edda; padding: 15px; margin: 10px; border-radius: 5px; border: 1px solid #c3e6cb;'>";
     echo "<strong>✅ FORM IS BEING PROCESSED!</strong><br>";
     echo "</div>";
@@ -74,6 +76,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_students'])) {
     $pwd_id = isset($savedFiles['pwd_id']) ? $savedFiles['pwd_id'] : null;
     
     // Insert into database
+    echo "<div style='background: #e2e3e5; padding: 15px; margin: 10px; border-radius: 5px; border: 1px solid #d6d8db;'>";
+    echo "<strong>🔧 DATABASE DEBUG:</strong><br>";
+    echo "Connection status: " . ($conn ? 'Connected' : 'Failed') . "<br>";
+    if ($conn) {
+        echo "Database: " . $conn->database . "<br>";
+        echo "Connection error: " . ($conn->error ?: 'None') . "<br>";
+    }
+    echo "</div>";
+    
     $stmt = $conn->prepare("INSERT INTO students (last_name, first_name, middle_initial, birth_date, age, sex, birth_city, birth_province, house_no, street_name, area, village, barangay, city, mother_name, mother_contact, father_name, father_contact, picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     
     if ($stmt) {
