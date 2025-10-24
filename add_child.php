@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['submit_students']) |
     echo "<strong>🔧 DATABASE DEBUG:</strong><br>";
     echo "Connection status: " . ($conn ? 'Connected' : 'Failed') . "<br>";
     if ($conn) {
-        echo "Database: " . $conn->database . "<br>";
+        echo "Database: " . (isset($conn->database) ? $conn->database : 'Not available') . "<br>";
         echo "Connection error: " . ($conn->error ?: 'None') . "<br>";
     }
     echo "</div>";
