@@ -49,10 +49,10 @@ try {
     echo "ℹ️ Using table: $tableName\n";
 
     // Check if sex column exists
-    $result = $conn->query("SHOW COLUMNS FROM students LIKE 'sex'");
+    $result = $conn->query("SHOW COLUMNS FROM `$tableName` LIKE 'sex'");
     if ($result->num_rows === 0) {
-        echo "\nℹ️ Adding 'sex' column to students table...\n";
-        if ($conn->query("ALTER TABLE students ADD COLUMN sex ENUM('Male','Female') NULL AFTER age")) {
+        echo "\nℹ️ Adding 'sex' column to $tableName table...\n";
+        if ($conn->query("ALTER TABLE `$tableName` ADD COLUMN sex ENUM('Male','Female') NULL AFTER age")) {
             echo "✅ Added 'sex' column successfully.\n";
         } else {
             echo "❌ Failed to add 'sex' column: " . $conn->error . "\n";
