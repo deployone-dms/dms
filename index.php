@@ -36,8 +36,17 @@ if (isset($_GET['fetch_docs']) && isset($_GET['id'])) {
 // Ensure dynamic columns only when students table exists
 if ($tableCheck = $conn->query("SHOW TABLES LIKE 'students'")) {
     if ($tableCheck->num_rows > 0) {
-        $conn->query("ALTER TABLE students ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
-        $conn->query("ALTER TABLE students ADD COLUMN IF NOT EXISTS archived TINYINT(1) NOT NULL DEFAULT 0");
+        // Check if status column exists before adding
+        $statusCheck = $conn->query("SHOW COLUMNS FROM students LIKE 'status'");
+        if ($statusCheck->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
+        }
+        
+        // Check if archived column exists before adding
+        $archivedCheck = $conn->query("SHOW COLUMNS FROM students LIKE 'archived'");
+        if ($archivedCheck->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN archived TINYINT(1) NOT NULL DEFAULT 0");
+        }
     }
     $tableCheck->free();
 }
