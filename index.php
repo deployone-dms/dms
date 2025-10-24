@@ -1152,9 +1152,19 @@ if ($studentsTableExists) {
         const mainContent = document.getElementById('main-content');
         const toggleBtn = document.getElementById('toggle-sidebar');
 
+        // Prevent multiple rapid clicks to avoid glitching
+        let isToggling = false;
         toggleBtn.addEventListener('click', () => {
+            if (isToggling) return;
+            isToggling = true;
+            
             sidebar.classList.toggle('collapsed');
             mainContent.classList.toggle('expanded');
+            
+            // Reset toggle lock after animation completes
+            setTimeout(() => {
+                isToggling = false;
+            }, 300);
         });
 
         // Auto-hide sidebar on mobile
