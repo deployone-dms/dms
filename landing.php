@@ -7,26 +7,10 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-// Optimized session management - only clear if necessary
+// Simplified session management - avoid constant session destruction
 if (!isset($_SESSION['user_logged_in']) || $_SESSION['user_logged_in'] !== true) {
-    // Only clear session if not in OTP process
-    if (!isset($_SESSION['otp'])) {
-        // Clear all session data except OTP-related data
-        $otp_data = [];
-        if (isset($_SESSION['otp'])) $otp_data['otp'] = $_SESSION['otp'];
-        if (isset($_SESSION['email'])) $otp_data['email'] = $_SESSION['email'];
-        if (isset($_SESSION['account_type'])) $otp_data['account_type'] = $_SESSION['account_type'];
-        
-        session_destroy();
-        session_start();
-        
-        // Restore only OTP data if it exists
-        if (!empty($otp_data)) {
-            foreach ($otp_data as $key => $value) {
-                $_SESSION[$key] = $value;
-            }
-        }
-    }
+    // Only clear specific session variables, not the entire session
+    unset($_SESSION['user_logged_in'], $_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_name']);
 }
 
 // PHPMailer manual include (adjust path if needed)
@@ -40,7 +24,8 @@ $emailErr = $passwordErr = $otpErr = "";
 // Handle OTP session clearing
 if (isset($_GET['clear_otp'])) {
     unset($_SESSION['otp'], $_SESSION['email'], $_SESSION['account_type']);
-    header("Location: landing.php");
+    // Remove the redirect to prevent loop
+    echo "<script>window.location.href = 'landing.php';</script>";
     exit;
 }
 
@@ -173,9 +158,8 @@ if (isset($_SESSION['otp'])) {
                 } catch (Exception $e) {
                     $otpErr = "OTP could not be sent. Mailer Error: {$mail->ErrorInfo}";
                 }
-                // Show OTP form after sending
-                header("Location: ".$_SERVER['PHP_SELF']);
-                exit;
+                // Show OTP form after sending - no redirect needed
+                // The form will be shown below
             } else {
                 $passwordErr = "Incorrect password";
             }
