@@ -40,12 +40,10 @@ try {
     echo "<h3>Current Configuration:</h3>";
     $config = include 'otp_config.php';
     echo "<pre>";
-    echo "SMTP Host: " . $config['email']['smtp_host'] . "\n";
-    echo "SMTP Port: " . $config['email']['smtp_port'] . "\n";
-    echo "SMTP Username: " . $config['email']['smtp_username'] . "\n";
-    echo "SMTP Encryption: " . $config['email']['smtp_encryption'] . "\n";
-    echo "From Email: " . $config['email']['from_email'] . "\n";
-    echo "From Name: " . $config['email']['from_name'] . "\n";
+    echo "Email Service: Brevo API\n";
+    echo "Brevo API Key: " . (getenv('BREVO_API_KEY') ? 'Set ✅' : 'Not set ❌') . "\n";
+    echo "From Email: " . (getenv('FROM_EMAIL') ?: $config['email']['from_email']) . "\n";
+    echo "From Name: " . (getenv('FROM_NAME') ?: $config['email']['from_name']) . "\n";
     echo "</pre>";
     
 } catch (Exception $e) {

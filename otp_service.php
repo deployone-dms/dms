@@ -1,18 +1,17 @@
 <?php
 require_once 'vendor/autoload.php';
 require_once 'otp_config.php';
-
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
+require_once 'email_service.php';
 
 class OTPService {
     private $config;
     private $conn;
+    private $emailService;
     
     public function __construct($connection) {
         $this->config = include 'otp_config.php';
         $this->conn = $connection;
+        $this->emailService = new EmailService();
         $this->createOTPTable();
     }
     
@@ -50,44 +49,20 @@ class OTPService {
             // Store OTP in database
             $this->storeOTP($email, $otp, $expiry);
             
-            // Send email
-            $mail = new PHPMailer(true);
+            // Send email using the new email service
+            $result = $this->emailService->sendOTP($email, $otp);
             
-            // Server settings
-            $mail->isSMTP();
-            $mail->Host = $this->config['email']['smtp_host'];
-            $mail->SMTPAuth = true;
-            $mail->Username = $this->config['email']['smtp_username'];
-            $mail->Password = $this->config['email']['smtp_password'];
-            $mail->SMTPSecure = $this->config['email']['smtp_encryption'];
-            $mail->Port = $this->config['email']['smtp_port'];
-            
-            // Timeout settings
-            $mail->Timeout = 30;
-            $mail->SMTPKeepAlive = true;
-            $mail->SMTPOptions = array(
-                'ssl' => array(
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true
-                )
-            );
-            
-            // Recipients
-            $mail->setFrom($this->config['email']['from_email'], $this->config['email']['from_name']);
-            $mail->addAddress($email);
-            
-            // Content
-            $mail->isHTML(true);
-            $mail->Subject = 'OTP Verification - Yakap Daycare Center';
-            $mail->Body = $this->getEmailTemplate($otp);
-            
-            $mail->send();
-            
-            return [
-                'success' => true,
-                'message' => 'OTP sent successfully to ' . $email
-            ];
+            if ($result['success']) {
+                return [
+                    'success' => true,
+                    'message' => 'OTP sent successfully to ' . $email
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'message' => 'OTP could not be sent. ' . $result['message']
+                ];
+            }
             
         } catch (Exception $e) {
             // Log the error for debugging
@@ -95,7 +70,7 @@ class OTPService {
             
             return [
                 'success' => false,
-                'message' => 'OTP could not be sent. Mailer Error: ' . $e->getMessage()
+                'message' => 'OTP could not be sent. Error: ' . $e->getMessage()
             ];
         }
     }
@@ -167,52 +142,6 @@ class OTPService {
         $stmt->execute();
     }
     
-    private function getEmailTemplate($otp) {
-        return "
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset='UTF-8'>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <title>OTP Verification</title>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #1B5E20, #2E7D32); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-                .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                .otp-code { background: #1B5E20; color: white; font-size: 32px; font-weight: bold; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0; letter-spacing: 5px; }
-                .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h1>🔐 OTP Verification</h1>
-                    <p>Yakap Daycare Center Management System</p>
-                </div>
-                <div class='content'>
-                    <h2>Hello!</h2>
-                    <p>You have requested to verify your email address. Please use the following One-Time Password (OTP) to complete your verification:</p>
-                    
-                    <div class='otp-code'>$otp</div>
-                    
-                    <p><strong>Important:</strong></p>
-                    <ul>
-                        <li>This OTP is valid for 5 minutes only</li>
-                        <li>Do not share this code with anyone</li>
-                        <li>If you didn't request this, please ignore this email</li>
-                    </ul>
-                    
-                    <p>If you have any questions, please contact our support team.</p>
-                </div>
-                <div class='footer'>
-                    <p>© 2024 Yakap Daycare Center. All rights reserved.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        ";
-    }
     
     public function cleanupExpiredOTPs() {
         $sql = "DELETE FROM otp_verification WHERE expires_at < NOW()";

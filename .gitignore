@@ -4,9 +4,6 @@ connection.php
 
 # Uploaded files
 uploads/
-*.jpg
-*.jpeg
-*.png
 *.gif
 *.pdf
 *.jfif
