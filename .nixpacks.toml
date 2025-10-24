@@ -1,0 +1,24 @@
+[phases.setup]
+nixPkgs = [
+    'php82',
+    'php82Extensions.pdo_mysql',
+    'php82Extensions.gd',
+    'php82Extensions.zip',
+    'apacheHttpd',
+    'composer'
+]
+
+[phases.install]
+cmds = [
+    "composer install --no-dev --optimize-autoloader",
+    "chmod -R 755 storage/ bootstrap/cache/"
+]
+
+[phases.build]
+cmds = [
+    "php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+    "php artisan key:generate"
+]
+
+[start]
+cmd = "apache2-foreground"
