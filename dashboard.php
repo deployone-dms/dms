@@ -50,9 +50,18 @@ $recent_students = table_exists($conn, 'students')
     ? $conn->query("SELECT first_name, last_name, created_at AS submission_date FROM students ORDER BY id DESC LIMIT 5")
     : false;
 
-$recent_teachers = table_exists($conn, 'teachers')
-    ? $conn->query("SELECT Name, Daycare_Center, District FROM teachers ORDER BY ID DESC LIMIT 5")
-    : false;
+$recent_teachers = false;
+if (table_exists($conn, 'teachers')) {
+    try {
+        $result = $conn->query("SELECT Name, Daycare_Center, District FROM teachers ORDER BY ID DESC LIMIT 5");
+        if ($result) {
+            $recent_teachers = $result;
+        }
+    } catch (Exception $e) {
+        // Table exists but has wrong structure, skip teachers section
+        $recent_teachers = false;
+    }
+}
 ?>
 
 <!DOCTYPE html>

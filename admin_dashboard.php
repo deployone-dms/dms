@@ -1,4 +1,18 @@
 <?php
+session_start();
+
+// Check if user is logged in and has admin access
+if (!isset($_SESSION['user_logged_in']) || $_SESSION['user_logged_in'] !== true) {
+    header("Location: index.php");
+    exit;
+}
+
+// Check if user has admin privileges (account_type 1 or 3)
+if (!isset($_SESSION['account_type']) || !in_array($_SESSION['account_type'], ['1', '3'])) {
+    header("Location: index.php");
+    exit;
+}
+
 // Auto-setup database on first load
 include 'auto_setup_database.php';
 setupDatabase();
