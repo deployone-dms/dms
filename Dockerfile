@@ -1,15 +1,21 @@
 # Use PHP 8.2 with Apache
 FROM php:8.2-apache
 
-# Install required PHP extensions and tools
-RUN apt-get update && apt-get install -y \
+# Set environment variables for non-interactive installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
     zip \
     unzip \
     git \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
 # Enable Apache modules
 RUN a2enmod rewrite headers
@@ -25,7 +31,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install dependencies (no dev dependencies for production)
 RUN if [ -f "composer.json" ]; then \
-    composer install --no-dev --optimize-autoloader --no-interaction; \
+    composer install --no-dev --optimize-autoloader --no-interaction --no-progress; \
     fi
 
 # Copy the rest of the application
@@ -36,19 +42,23 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && [ -d "/var/www/html/bootstrap/cache" ] && chmod -R 755 /var/www/html/bootstrap/cache || true
 
-# Configure Apache to use PORT environment variable
-RUN echo 'Listen 8080' > /etc/apache2/ports.conf
-RUN echo 'Listen 80' >> /etc/apache2/ports.conf
-
-# Create Apache configuration
-RUN echo '<VirtualHost *:8080>\
+# Configure Apache
+RUN echo 'Listen 8080' > /etc/apache2/ports.conf \
+    && echo 'Listen 80' >> /etc/apache2/ports.conf \
+    && echo '<VirtualHost *:8080>\
     DocumentRoot /var/www/html\
     <Directory "/var/www/html">\
-        Options Indexes FollowSymLinks\
+        Options -Indexes +FollowSymLinks\
         AllowOverride All\
         Require all granted\
     </Directory>\
+    ErrorLog ${APACHE_LOG_DIR}/error.log\
+    CustomLog ${APACHE_LOG_DIR}/access.log combined\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD curl -f http://localhost:8080/ || exit 1
 
 # Expose the port the app runs on
 EXPOSE 8080
