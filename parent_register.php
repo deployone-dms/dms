@@ -20,10 +20,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
     } else {
-        $hash = password_hash($password, PASSWORD_BCRYPT);
-        $stmt = $conn->prepare("INSERT INTO parents (email, password_hash, full_name, phone) VALUES (?,?,?,?)");
+        $stmt = $conn->prepare("INSERT INTO parents (email, password, first_name, last_name, phone, address) VALUES (?,?,?,?,?,?)");
         if ($stmt) {
-            $stmt->bind_param('ssss', $email, $hash, $full_name, $phone);
+            // Split full_name into first and last name
+            $name_parts = explode(' ', $full_name, 2);
+            $first_name = $name_parts[0];
+            $last_name = isset($name_parts[1]) ? $name_parts[1] : '';
+            $address = ''; // Default empty address
+            $stmt->bind_param('ssssss', $email, $password, $first_name, $last_name, $phone, $address);
             if ($stmt->execute()) {
                 $parent_id = $stmt->insert_id;
                 $stmt->close();

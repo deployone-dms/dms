@@ -9,15 +9,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$email || !$password) {
         $error = 'Email and password are required.';
     } else {
-        $stmt = $conn->prepare("SELECT id, password_hash, full_name FROM parents WHERE email=? LIMIT 1");
+        $stmt = $conn->prepare("SELECT id, password, first_name, last_name FROM parents WHERE email=? LIMIT 1");
         if ($stmt) {
             $stmt->bind_param('s', $email);
             $stmt->execute();
             $res = $stmt->get_result();
             if ($res && ($row = $res->fetch_assoc())) {
-                if (password_verify($password, $row['password_hash'])) {
+                if ($password === $row['password']) {
                     $_SESSION['parent_id'] = intval($row['id']);
-                    $_SESSION['parent_name'] = $row['full_name'];
+                    $_SESSION['parent_name'] = $row['first_name'] . ' ' . $row['last_name'];
                     $embed = isset($_GET['embed']) && $_GET['embed'] == '1';
                     if ($embed) {
                         echo '<!DOCTYPE html><html><head><meta charset="utf-8"><script>window.top.location.href = "parent_dashboard.php";</script></head><body></body></html>';
