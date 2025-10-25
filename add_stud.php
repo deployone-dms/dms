@@ -257,11 +257,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
             $stmt->bind_param($bindTypes, ...$bindParams);
         }
     } else {
-        // Ensure the table has proper default values for required fields
-        $conn->query("ALTER TABLE students MODIFY COLUMN parent_name VARCHAR(255) DEFAULT 'N/A'");
-        $conn->query("ALTER TABLE students MODIFY COLUMN parent_phone VARCHAR(50) DEFAULT 'N/A'");
-        $conn->query("ALTER TABLE students MODIFY COLUMN parent_email VARCHAR(255) DEFAULT 'N/A'");
-        $conn->query("ALTER TABLE students MODIFY COLUMN address TEXT DEFAULT 'N/A'");
+        // Check current table structure and fix it if needed
+        $tableCheck = $conn->query("SHOW COLUMNS FROM students");
+        $hasParentName = false;
+        $hasParentPhone = false;
+        $hasParentEmail = false;
+        $hasAddress = false;
+        
+        if ($tableCheck) {
+            while ($column = $tableCheck->fetch_assoc()) {
+                if ($column['Field'] === 'parent_name') $hasParentName = true;
+                if ($column['Field'] === 'parent_phone') $hasParentPhone = true;
+                if ($column['Field'] === 'parent_email') $hasParentEmail = true;
+                if ($column['Field'] === 'address') $hasAddress = true;
+            }
+        }
+        
+        // Add missing columns with proper defaults
+        if (!$hasParentName) {
+            $result = $conn->query("ALTER TABLE students ADD COLUMN parent_name VARCHAR(255) DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to add parent_name column: " . $conn->error);
+            }
+        } else {
+            $result = $conn->query("ALTER TABLE students MODIFY COLUMN parent_name VARCHAR(255) DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to modify parent_name column: " . $conn->error);
+            }
+        }
+        
+        if (!$hasParentPhone) {
+            $result = $conn->query("ALTER TABLE students ADD COLUMN parent_phone VARCHAR(50) DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to add parent_phone column: " . $conn->error);
+            }
+        } else {
+            $result = $conn->query("ALTER TABLE students MODIFY COLUMN parent_phone VARCHAR(50) DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to modify parent_phone column: " . $conn->error);
+            }
+        }
+        
+        if (!$hasParentEmail) {
+            $result = $conn->query("ALTER TABLE students ADD COLUMN parent_email VARCHAR(255) DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to add parent_email column: " . $conn->error);
+            }
+        } else {
+            $result = $conn->query("ALTER TABLE students MODIFY COLUMN parent_email VARCHAR(255) DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to modify parent_email column: " . $conn->error);
+            }
+        }
+        
+        if (!$hasAddress) {
+            $result = $conn->query("ALTER TABLE students ADD COLUMN address TEXT DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to add address column: " . $conn->error);
+            }
+        } else {
+            $result = $conn->query("ALTER TABLE students MODIFY COLUMN address TEXT DEFAULT 'N/A'");
+            if (!$result) {
+                error_log("Failed to modify address column: " . $conn->error);
+            }
+        }
         
         // Use the new schema without 'sex' column - insert into a simplified structure
         $stmt = $conn->prepare("INSERT INTO students (first_name, last_name, middle_name, birth_date, age, parent_name, parent_phone, parent_email, address, enrollment_date, status, picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
