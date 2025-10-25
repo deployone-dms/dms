@@ -70,38 +70,92 @@ try {
 
 // Optionally load latest progress summary per student (example: grossmotor_submissions)
 function load_latest_grossmotor($conn, $student_id) {
-    $gm = $conn->prepare("SELECT payload, created_at FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
-    if (!$gm) return null;
-    $gm->bind_param('i', $student_id);
-    $gm->execute();
-    $res = $gm->get_result();
-    $row = $res ? $res->fetch_assoc() : null;
-    $gm->close();
-    if (!$row) return null;
-    $totals = ['t1'=>0,'t2'=>0,'t3'=>0];
-    $data = json_decode($row['payload'] ?? '[]', true);
-    if (is_array($data)) {
-        foreach($data as $item){
-            $totals['t1'] += isset($item['eval1']) && is_numeric($item['eval1']) ? (int)$item['eval1'] : 0;
-            $totals['t2'] += isset($item['eval2']) && is_numeric($item['eval2']) ? (int)$item['eval2'] : 0;
-            $totals['t3'] += isset($item['eval3']) && is_numeric($item['eval3']) ? (int)$item['eval3'] : 0;
+    try {
+        // First check if the table exists
+        $tableCheck = $conn->query("SHOW TABLES LIKE 'grossmotor_submissions'");
+        if (!$tableCheck || $tableCheck->num_rows == 0) {
+            return ['created_at' => null, 'totals' => ['t1'=>0,'t2'=>0,'t3'=>0]];
         }
+        
+        // Check if student_id column exists
+        $columnCheck = $conn->query("SHOW COLUMNS FROM grossmotor_submissions LIKE 'student_id'");
+        if (!$columnCheck || $columnCheck->num_rows == 0) {
+            // If no student_id column, try to get any record (fallback)
+            $gm = $conn->prepare("SELECT payload, created_at FROM grossmotor_submissions ORDER BY created_at DESC LIMIT 1");
+            if (!$gm) return ['created_at' => null, 'totals' => ['t1'=>0,'t2'=>0,'t3'=>0]];
+            $gm->execute();
+            $res = $gm->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $gm->close();
+        } else {
+            // Normal query with student_id
+            $gm = $conn->prepare("SELECT payload, created_at FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
+            if (!$gm) return ['created_at' => null, 'totals' => ['t1'=>0,'t2'=>0,'t3'=>0]];
+            $gm->bind_param('i', $student_id);
+            $gm->execute();
+            $res = $gm->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $gm->close();
+        }
+        
+        if (!$row) return ['created_at' => null, 'totals' => ['t1'=>0,'t2'=>0,'t3'=>0]];
+        
+        $totals = ['t1'=>0,'t2'=>0,'t3'=>0];
+        $data = json_decode($row['payload'] ?? '[]', true);
+        if (is_array($data)) {
+            foreach($data as $item){
+                $totals['t1'] += isset($item['eval1']) && is_numeric($item['eval1']) ? (int)$item['eval1'] : 0;
+                $totals['t2'] += isset($item['eval2']) && is_numeric($item['eval2']) ? (int)$item['eval2'] : 0;
+                $totals['t3'] += isset($item['eval3']) && is_numeric($item['eval3']) ? (int)$item['eval3'] : 0;
+            }
+        }
+        return [ 'created_at' => $row['created_at'], 'totals' => $totals ];
+    } catch (Exception $e) {
+        // Log error but don't break the page
+        error_log("Error in load_latest_grossmotor: " . $e->getMessage());
+        return ['created_at' => null, 'totals' => ['t1'=>0,'t2'=>0,'t3'=>0]];
     }
-    return [ 'created_at' => $row['created_at'], 'totals' => $totals ];
 }
 
 function load_grossmotor_details($conn, $student_id) {
-    $gm = $conn->prepare("SELECT payload, created_at FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
-    if (!$gm) return null;
-    $gm->bind_param('i', $student_id);
-    $gm->execute();
-    $res = $gm->get_result();
-    $row = $res ? $res->fetch_assoc() : null;
-    $gm->close();
-    if (!$row) return null;
-    $items = json_decode($row['payload'] ?? '[]', true);
-    if (!is_array($items)) $items = [];
-    return [ 'created_at' => $row['created_at'], 'items' => $items ];
+    try {
+        // First check if the table exists
+        $tableCheck = $conn->query("SHOW TABLES LIKE 'grossmotor_submissions'");
+        if (!$tableCheck || $tableCheck->num_rows == 0) {
+            return ['created_at' => null, 'items' => []];
+        }
+        
+        // Check if student_id column exists
+        $columnCheck = $conn->query("SHOW COLUMNS FROM grossmotor_submissions LIKE 'student_id'");
+        if (!$columnCheck || $columnCheck->num_rows == 0) {
+            // If no student_id column, try to get any record (fallback)
+            $gm = $conn->prepare("SELECT payload, created_at FROM grossmotor_submissions ORDER BY created_at DESC LIMIT 1");
+            if (!$gm) return ['created_at' => null, 'items' => []];
+            $gm->execute();
+            $res = $gm->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $gm->close();
+        } else {
+            // Normal query with student_id
+            $gm = $conn->prepare("SELECT payload, created_at FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
+            if (!$gm) return ['created_at' => null, 'items' => []];
+            $gm->bind_param('i', $student_id);
+            $gm->execute();
+            $res = $gm->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $gm->close();
+        }
+        
+        if (!$row) return ['created_at' => null, 'items' => []];
+        
+        $items = json_decode($row['payload'] ?? '[]', true);
+        if (!is_array($items)) $items = [];
+        return [ 'created_at' => $row['created_at'], 'items' => $items ];
+    } catch (Exception $e) {
+        // Log error but don't break the page
+        error_log("Error in load_grossmotor_details: " . $e->getMessage());
+        return ['created_at' => null, 'items' => []];
+    }
 }
 
 function load_recent_attendance($conn, $student_id, $days = 30) {
