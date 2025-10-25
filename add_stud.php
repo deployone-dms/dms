@@ -257,6 +257,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
             $stmt->bind_param($bindTypes, ...$bindParams);
         }
     } else {
+        // Ensure the table has proper default values for required fields
+        $conn->query("ALTER TABLE students MODIFY COLUMN parent_name VARCHAR(255) DEFAULT 'N/A'");
+        $conn->query("ALTER TABLE students MODIFY COLUMN parent_phone VARCHAR(50) DEFAULT 'N/A'");
+        $conn->query("ALTER TABLE students MODIFY COLUMN parent_email VARCHAR(255) DEFAULT 'N/A'");
+        $conn->query("ALTER TABLE students MODIFY COLUMN address TEXT DEFAULT 'N/A'");
+        
         // Use the new schema without 'sex' column - insert into a simplified structure
         $stmt = $conn->prepare("INSERT INTO students (first_name, last_name, middle_name, birth_date, age, parent_name, parent_phone, parent_email, address, enrollment_date, status, picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
@@ -286,9 +292,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
         }
     }
     
-    if ($stmt && $stmt->execute()) {
-        $stmt->close();
-        if (isset($_GET['embed']) && $_GET['embed'] == '1') {
+    if ($stmt) {
+        if ($stmt->execute()) {
+            $stmt->close();
+            if (isset($_GET['embed']) && $_GET['embed'] == '1') {
             echo "<div style='padding:30px; font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif; text-align:center;'>";
             echo "<div style='display:inline-block; background:#F8FFF3; border:1px solid #C3E6CB; color:#155724; padding:16px 20px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.06);'>";
             echo "<div style='font-size:18px; font-weight:700; margin-bottom:6px;'>Application submitted</div>";
@@ -299,6 +306,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
         } else {
             header("Location: index.php?success=student_added");
             exit;
+        }
+        } else {
+            // Handle database error
+            $error_message = "Database error: " . $conn->error;
+            if (isset($_GET['embed']) && $_GET['embed'] == '1') {
+                echo "<div style='padding:30px; font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif; text-align:center;'>";
+                echo "<div style='display:inline-block; background:#F8D7DA; border:1px solid #F5C6CB; color:#721C24; padding:16px 20px; border-radius:12px;'>";
+                echo "<div style='font-size:18px; font-weight:700; margin-bottom:6px;'>Error</div>";
+                echo "<div style='font-size:15px;'>Failed to submit application. Please try again.</div>";
+                echo "</div>";
+                echo "</div>";
+                exit;
+            } else {
+                header("Location: index.php?error=database_error");
+                exit;
+            }
         }
     } else {
         echo "<div style='background: #f8d7da; padding: 15px; margin: 10px; border-radius: 5px; border: 1px solid #f5c6cb;'>";
