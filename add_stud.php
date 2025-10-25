@@ -76,11 +76,185 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
     $hasSexColumn = $checkColumn && $checkColumn->num_rows > 0;
     
     if ($hasSexColumn) {
-        // Use the old schema with 'sex' column
-        $stmt = $conn->prepare("INSERT INTO students (last_name, first_name, middle_initial, birth_date, age, sex, birth_city, birth_province, house_no, street_name, area, village, barangay, city, mother_name, mother_contact, father_name, father_contact, picture, psa_birth_certificate, immunization_card, qc_parent_id, solo_parent_id, four_ps_id, pwd_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        // Check what columns actually exist in the table
+        $columns = $conn->query("SHOW COLUMNS FROM students");
+        $existingColumns = [];
+        if ($columns) {
+            while ($column = $columns->fetch_assoc()) {
+                $existingColumns[] = $column['Field'];
+            }
+        }
+        
+        // Build INSERT statement based on existing columns
+        $insertColumns = [];
+        $insertValues = [];
+        $bindTypes = "";
+        $bindParams = [];
+        
+        // Basic required fields
+        if (in_array('last_name', $existingColumns)) {
+            $insertColumns[] = 'last_name';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $last_name;
+        }
+        if (in_array('first_name', $existingColumns)) {
+            $insertColumns[] = 'first_name';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $first_name;
+        }
+        if (in_array('middle_initial', $existingColumns)) {
+            $insertColumns[] = 'middle_initial';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $middle_initial;
+        }
+        if (in_array('birth_date', $existingColumns)) {
+            $insertColumns[] = 'birth_date';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $birth_date;
+        }
+        if (in_array('age', $existingColumns)) {
+            $insertColumns[] = 'age';
+            $insertValues[] = '?';
+            $bindTypes .= 'i';
+            $bindParams[] = $age;
+        }
+        if (in_array('sex', $existingColumns)) {
+            $insertColumns[] = 'sex';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $sex;
+        }
+        
+        // Address fields (only if they exist)
+        if (in_array('birth_city', $existingColumns)) {
+            $insertColumns[] = 'birth_city';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $birth_city;
+        }
+        if (in_array('birth_province', $existingColumns)) {
+            $insertColumns[] = 'birth_province';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $birth_province;
+        }
+        if (in_array('house_no', $existingColumns)) {
+            $insertColumns[] = 'house_no';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $house_no;
+        }
+        if (in_array('street_name', $existingColumns)) {
+            $insertColumns[] = 'street_name';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $street_name;
+        }
+        if (in_array('area', $existingColumns)) {
+            $insertColumns[] = 'area';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $area;
+        }
+        if (in_array('village', $existingColumns)) {
+            $insertColumns[] = 'village';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $village;
+        }
+        if (in_array('barangay', $existingColumns)) {
+            $insertColumns[] = 'barangay';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $barangay;
+        }
+        if (in_array('city', $existingColumns)) {
+            $insertColumns[] = 'city';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $city;
+        }
+        
+        // Parent fields
+        if (in_array('mother_name', $existingColumns)) {
+            $insertColumns[] = 'mother_name';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $mother_name;
+        }
+        if (in_array('mother_contact', $existingColumns)) {
+            $insertColumns[] = 'mother_contact';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $mother_contact;
+        }
+        if (in_array('father_name', $existingColumns)) {
+            $insertColumns[] = 'father_name';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $father_name;
+        }
+        if (in_array('father_contact', $existingColumns)) {
+            $insertColumns[] = 'father_contact';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $father_contact;
+        }
+        
+        // Document fields
+        if (in_array('picture', $existingColumns)) {
+            $insertColumns[] = 'picture';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $picture;
+        }
+        if (in_array('psa_birth_certificate', $existingColumns)) {
+            $insertColumns[] = 'psa_birth_certificate';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $psa_birth_certificate;
+        }
+        if (in_array('immunization_card', $existingColumns)) {
+            $insertColumns[] = 'immunization_card';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $immunization_card;
+        }
+        if (in_array('qc_parent_id', $existingColumns)) {
+            $insertColumns[] = 'qc_parent_id';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $qc_parent_id;
+        }
+        if (in_array('solo_parent_id', $existingColumns)) {
+            $insertColumns[] = 'solo_parent_id';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $solo_parent_id;
+        }
+        if (in_array('four_ps_id', $existingColumns)) {
+            $insertColumns[] = 'four_ps_id';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $four_ps_id;
+        }
+        if (in_array('pwd_id', $existingColumns)) {
+            $insertColumns[] = 'pwd_id';
+            $insertValues[] = '?';
+            $bindTypes .= 's';
+            $bindParams[] = $pwd_id;
+        }
+        
+        // Build the final INSERT statement
+        $sql = "INSERT INTO students (" . implode(', ', $insertColumns) . ") VALUES (" . implode(', ', $insertValues) . ")";
+        $stmt = $conn->prepare($sql);
         
         if ($stmt) {
-            $stmt->bind_param("ssssissssssssssssssssssss", $last_name, $first_name, $middle_initial, $birth_date, $age, $sex, $birth_city, $birth_province, $house_no, $street_name, $area, $village, $barangay, $city, $mother_name, $mother_contact, $father_name, $father_contact, $picture, $psa_birth_certificate, $immunization_card, $qc_parent_id, $solo_parent_id, $four_ps_id, $pwd_id);
+            $stmt->bind_param($bindTypes, ...$bindParams);
         }
     } else {
         // Use the new schema without 'sex' column - insert into a simplified structure
