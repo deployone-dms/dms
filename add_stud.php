@@ -262,11 +262,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
         
         if ($stmt) {
             $parent_name = $mother_name ?: $father_name ?: 'N/A';
-            $parent_phone = $mother_contact ?: $father_contact ?: '';
-            $parent_email = '';
-            $address = $house_no . ' ' . $street_name . ', ' . $area . ', ' . $village . ', ' . $barangay . ', ' . $city;
+            $parent_phone = $mother_contact ?: $father_contact ?: 'N/A';
+            $parent_email = 'N/A';
+            $address = trim($house_no . ' ' . $street_name . ', ' . $area . ', ' . $village . ', ' . $barangay . ', ' . $city) ?: 'N/A';
             $enrollment_date = date('Y-m-d');
             $status = 'PENDING';
+            
+            // Ensure all required fields have values
+            $first_name = $first_name ?: 'N/A';
+            $last_name = $last_name ?: 'N/A';
+            $middle_initial = $middle_initial ?: '';
+            $birth_date = $birth_date ?: date('Y-m-d');
+            $age = $age ?: 0;
+            $picture = $picture ?: '';
+            $psa_birth_certificate = $psa_birth_certificate ?: '';
+            $immunization_card = $immunization_card ?: '';
+            $qc_parent_id = $qc_parent_id ?: '';
+            $solo_parent_id = $solo_parent_id ?: '';
+            $four_ps_id = $four_ps_id ?: '';
+            $pwd_id = $pwd_id ?: '';
             
             $stmt->bind_param("ssssssssssssssssss", $first_name, $last_name, $middle_initial, $birth_date, $age, $parent_name, $parent_phone, $parent_email, $address, $enrollment_date, $status, $picture, $psa_birth_certificate, $immunization_card, $qc_parent_id, $solo_parent_id, $four_ps_id, $pwd_id);
         }
