@@ -188,15 +188,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Load latest saved values for prefill
 $prefill = [];
 if ($studentId > 0) {
-    // Try to get data using payload column first, then submission_data
-    $pf = $conn->prepare("SELECT payload, submission_data FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
+    // Get data using payload column
+    $pf = $conn->prepare("SELECT payload FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
     if ($pf) {
         $pf->bind_param('i', $studentId);
         if ($pf->execute()) {
             $res = $pf->get_result();
             if ($res && ($row = $res->fetch_assoc())) {
-                // Try payload first, then submission_data
-                $data = $row['payload'] ?? $row['submission_data'] ?? '[]';
+                $data = $row['payload'] ?? '[]';
                 $arr = json_decode($data, true);
                 if (is_array($arr)) {
                     foreach ($arr as $it) {
