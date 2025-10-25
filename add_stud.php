@@ -14,6 +14,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['debug'])) {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
+    // First, ensure the database table has proper structure
+    // Check and fix table structure before inserting
+    $structureFix = $conn->query("SHOW COLUMNS FROM students LIKE 'parent_name'");
+    if ($structureFix && $structureFix->num_rows > 0) {
+        $colInfo = $structureFix->fetch_assoc();
+        // If parent_name doesn't have a default value, fix it
+        if ($colInfo['Default'] === NULL && $colInfo['Null'] === 'NO') {
+            $conn->query("ALTER TABLE students MODIFY COLUMN parent_name VARCHAR(255) NOT NULL DEFAULT 'N/A'");
+            $conn->query("ALTER TABLE students MODIFY COLUMN parent_phone VARCHAR(50) NOT NULL DEFAULT 'N/A'");
+            $conn->query("ALTER TABLE students MODIFY COLUMN parent_email VARCHAR(255) NOT NULL DEFAULT 'N/A'");
+        }
+    }
+    
     // Get form data
     $last_name = $_POST['last_name'] ?? '';
     $first_name = $_POST['first_name'] ?? '';
