@@ -45,6 +45,33 @@ if ($tableExists && $tableExists->num_rows > 0) {
             }
         }
         
+        // Fix columns that are missing defaults
+        echo "<h3>🔧 Fixing Columns Without Defaults:</h3>";
+        $columnsToFix = [
+            'first_name' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+            'last_name' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+            'middle_name' => "VARCHAR(50) DEFAULT ''",
+            'birth_date' => "DATE DEFAULT NULL",
+            'age' => "INT DEFAULT 0",
+            'parent_name' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+            'parent_phone' => "VARCHAR(50) NOT NULL DEFAULT 'N/A'",
+            'parent_email' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+            'enrollment_date' => "DATE DEFAULT NULL",
+            'status' => "VARCHAR(50) DEFAULT 'PENDING'"
+        ];
+        
+        foreach ($columnsToFix as $columnName => $columnDef) {
+            $checkCol = $conn->query("SHOW COLUMNS FROM students LIKE '$columnName'");
+            if ($checkCol && $checkCol->num_rows > 0) {
+                $result = $conn->query("ALTER TABLE students MODIFY COLUMN $columnName $columnDef");
+                if ($result) {
+                    echo "<p>✅ Fixed column: $columnName</p>";
+                } else {
+                    echo "<p>⚠️ Could not fix column $columnName: " . $conn->error . "</p>";
+                }
+            }
+        }
+        
         // Test insert with minimal data
         echo "<h3>Test Insert:</h3>";
         try {

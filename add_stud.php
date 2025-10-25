@@ -15,15 +15,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['debug'])) {
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['last_name'])) {
     // First, ensure the database table has proper structure
-    // Check and fix table structure before inserting
-    $structureFix = $conn->query("SHOW COLUMNS FROM students LIKE 'parent_name'");
-    if ($structureFix && $structureFix->num_rows > 0) {
-        $colInfo = $structureFix->fetch_assoc();
-        // If parent_name doesn't have a default value, fix it
-        if ($colInfo['Default'] === NULL && $colInfo['Null'] === 'NO') {
-            $conn->query("ALTER TABLE students MODIFY COLUMN parent_name VARCHAR(255) NOT NULL DEFAULT 'N/A'");
-            $conn->query("ALTER TABLE students MODIFY COLUMN parent_phone VARCHAR(50) NOT NULL DEFAULT 'N/A'");
-            $conn->query("ALTER TABLE students MODIFY COLUMN parent_email VARCHAR(255) NOT NULL DEFAULT 'N/A'");
+    // Fix all columns that might be missing default values
+    $columnsToFix = [
+        'first_name' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+        'last_name' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+        'middle_name' => "VARCHAR(50) DEFAULT ''",
+        'birth_date' => "DATE DEFAULT NULL",
+        'age' => "INT DEFAULT 0",
+        'parent_name' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+        'parent_phone' => "VARCHAR(50) NOT NULL DEFAULT 'N/A'",
+        'parent_email' => "VARCHAR(255) NOT NULL DEFAULT 'N/A'",
+        'enrollment_date' => "DATE DEFAULT NULL",
+        'status' => "VARCHAR(50) DEFAULT 'PENDING'",
+        'picture' => "VARCHAR(255) DEFAULT ''",
+        'psa_birth_certificate' => "VARCHAR(255) DEFAULT ''",
+        'immunization_card' => "VARCHAR(255) DEFAULT ''",
+        'qc_parent_id' => "VARCHAR(255) DEFAULT ''",
+        'solo_parent_id' => "VARCHAR(255) DEFAULT ''",
+        'four_ps_id' => "VARCHAR(255) DEFAULT ''",
+        'pwd_id' => "VARCHAR(255) DEFAULT ''"
+    ];
+    
+    foreach ($columnsToFix as $columnName => $columnDef) {
+        $checkCol = $conn->query("SHOW COLUMNS FROM students LIKE '$columnName'");
+        if ($checkCol && $checkCol->num_rows > 0) {
+            // Column exists, modify it to ensure proper defaults
+            $conn->query("ALTER TABLE students MODIFY COLUMN $columnName $columnDef");
+        } else {
+            // Column doesn't exist, add it
+            $conn->query("ALTER TABLE students ADD COLUMN $columnName $columnDef");
         }
     }
     
