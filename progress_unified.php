@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($studentId <= 0) {
         $error = 'Missing student.';
     } else {
-        // Ensure table exists and student_id column
+        // Ensure table exists with correct structure
         $conn->query("CREATE TABLE IF NOT EXISTS grossmotor_submissions (
             id INT AUTO_INCREMENT PRIMARY KEY,
             student_id INT NOT NULL DEFAULT 0,
@@ -124,6 +124,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $check_col = $conn->query("SHOW COLUMNS FROM grossmotor_submissions LIKE 'student_id'");
         if ($check_col && $check_col->num_rows == 0) {
             $conn->query("ALTER TABLE grossmotor_submissions ADD COLUMN student_id INT NOT NULL DEFAULT 0");
+        }
+        
+        // Check if payload column exists, if not add it
+        $check_payload = $conn->query("SHOW COLUMNS FROM grossmotor_submissions LIKE 'payload'");
+        if ($check_payload && $check_payload->num_rows == 0) {
+            $conn->query("ALTER TABLE grossmotor_submissions ADD COLUMN payload TEXT NOT NULL");
+        }
+        
+        // Check if submission_data column exists and has default value
+        $check_submission_data = $conn->query("SHOW COLUMNS FROM grossmotor_submissions LIKE 'submission_data'");
+        if ($check_submission_data && $check_submission_data->num_rows > 0) {
+            // If submission_data exists, make sure it has a default value
+            $conn->query("ALTER TABLE grossmotor_submissions MODIFY COLUMN submission_data TEXT DEFAULT NULL");
         }
         
         // Check if index exists before creating
@@ -144,42 +157,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $payloadArr[] = [ 'item' => $label, 'eval1' => $e1, 'eval2' => $e2, 'eval3' => $e3 ];
         }
         $payload = json_encode($payloadArr);
-        // Check what columns exist in the table
-        $columnCheck = $conn->query("SHOW COLUMNS FROM grossmotor_submissions");
-        $hasSubmissionData = false;
-        $hasPayload = false;
-        
-        if ($columnCheck) {
-            while ($column = $columnCheck->fetch_assoc()) {
-                if ($column['Field'] === 'submission_data') {
-                    $hasSubmissionData = true;
-                }
-                if ($column['Field'] === 'payload') {
-                    $hasPayload = true;
+        // Try to insert using payload column first (preferred)
+        $stmt = $conn->prepare("INSERT INTO grossmotor_submissions (student_id, payload) VALUES (?, ?)");
+        if ($stmt) {
+            $stmt->bind_param('is', $studentId, $payload);
+            if ($stmt->execute()) { 
+                $saved = true; 
+            } else {
+                // If payload column fails, try submission_data column
+                $stmt->close();
+                $stmt = $conn->prepare("INSERT INTO grossmotor_submissions (student_id, submission_data) VALUES (?, ?)");
+                if ($stmt) {
+                    $stmt->bind_param('is', $studentId, $payload);
+                    if ($stmt->execute()) { $saved = true; }
+                    $stmt->close();
+                } else {
+                    $error = 'Save failed - no compatible columns found.';
                 }
             }
-        }
-        
-        if ($hasSubmissionData && !$hasPayload) {
-            // Use submission_data column
-            $stmt = $conn->prepare("INSERT INTO grossmotor_submissions (student_id, submission_data) VALUES (?, ?)");
-            if ($stmt) {
-                $stmt->bind_param('is', $studentId, $payload);
-                if ($stmt->execute()) { $saved = true; }
+            if (!$saved) {
                 $stmt->close();
-            } else {
                 $error = 'Save failed.';
             }
         } else {
-            // Use payload column (default)
-            $stmt = $conn->prepare("INSERT INTO grossmotor_submissions (student_id, payload) VALUES (?, ?)");
-            if ($stmt) {
-                $stmt->bind_param('is', $studentId, $payload);
-                if ($stmt->execute()) { $saved = true; }
-                $stmt->close();
-            } else {
-                $error = 'Save failed.';
-            }
+            $error = 'Save failed - could not prepare statement.';
         }
     }
 }
@@ -187,31 +188,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Load latest saved values for prefill
 $prefill = [];
 if ($studentId > 0) {
-    // Check what columns exist and use the appropriate one
-    $columnCheck = $conn->query("SHOW COLUMNS FROM grossmotor_submissions");
-    $hasSubmissionData = false;
-    $hasPayload = false;
-    
-    if ($columnCheck) {
-        while ($column = $columnCheck->fetch_assoc()) {
-            if ($column['Field'] === 'submission_data') {
-                $hasSubmissionData = true;
-            }
-            if ($column['Field'] === 'payload') {
-                $hasPayload = true;
-            }
-        }
-    }
-    
-    $columnName = ($hasSubmissionData && !$hasPayload) ? 'submission_data' : 'payload';
-    $pf = $conn->prepare("SELECT {$columnName} FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
+    // Try to get data using payload column first, then submission_data
+    $pf = $conn->prepare("SELECT payload, submission_data FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
     if ($pf) {
         $pf->bind_param('i', $studentId);
         if ($pf->execute()) {
             $res = $pf->get_result();
             if ($res && ($row = $res->fetch_assoc())) {
-                $dataColumn = $hasSubmissionData && !$hasPayload ? 'submission_data' : 'payload';
-                $arr = json_decode($row[$dataColumn] ?? '[]', true);
+                // Try payload first, then submission_data
+                $data = $row['payload'] ?? $row['submission_data'] ?? '[]';
+                $arr = json_decode($data, true);
                 if (is_array($arr)) {
                     foreach ($arr as $it) {
                         $label = isset($it['item']) ? (string)$it['item'] : '';
