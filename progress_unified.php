@@ -144,13 +144,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $payloadArr[] = [ 'item' => $label, 'eval1' => $e1, 'eval2' => $e2, 'eval3' => $e3 ];
         }
         $payload = json_encode($payloadArr);
-        $stmt = $conn->prepare("INSERT INTO grossmotor_submissions (student_id, payload) VALUES (?, ?)");
-        if ($stmt) {
-            $stmt->bind_param('is', $studentId, $payload);
-            if ($stmt->execute()) { $saved = true; }
-            $stmt->close();
+        // Check what columns exist in the table
+        $columnCheck = $conn->query("SHOW COLUMNS FROM grossmotor_submissions");
+        $hasSubmissionData = false;
+        $hasPayload = false;
+        
+        if ($columnCheck) {
+            while ($column = $columnCheck->fetch_assoc()) {
+                if ($column['Field'] === 'submission_data') {
+                    $hasSubmissionData = true;
+                }
+                if ($column['Field'] === 'payload') {
+                    $hasPayload = true;
+                }
+            }
+        }
+        
+        if ($hasSubmissionData && !$hasPayload) {
+            // Use submission_data column
+            $stmt = $conn->prepare("INSERT INTO grossmotor_submissions (student_id, submission_data) VALUES (?, ?)");
+            if ($stmt) {
+                $stmt->bind_param('is', $studentId, $payload);
+                if ($stmt->execute()) { $saved = true; }
+                $stmt->close();
+            } else {
+                $error = 'Save failed.';
+            }
         } else {
-            $error = 'Save failed.';
+            // Use payload column (default)
+            $stmt = $conn->prepare("INSERT INTO grossmotor_submissions (student_id, payload) VALUES (?, ?)");
+            if ($stmt) {
+                $stmt->bind_param('is', $studentId, $payload);
+                if ($stmt->execute()) { $saved = true; }
+                $stmt->close();
+            } else {
+                $error = 'Save failed.';
+            }
         }
     }
 }
@@ -158,13 +187,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Load latest saved values for prefill
 $prefill = [];
 if ($studentId > 0) {
-    $pf = $conn->prepare("SELECT payload FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
+    // Check what columns exist and use the appropriate one
+    $columnCheck = $conn->query("SHOW COLUMNS FROM grossmotor_submissions");
+    $hasSubmissionData = false;
+    $hasPayload = false;
+    
+    if ($columnCheck) {
+        while ($column = $columnCheck->fetch_assoc()) {
+            if ($column['Field'] === 'submission_data') {
+                $hasSubmissionData = true;
+            }
+            if ($column['Field'] === 'payload') {
+                $hasPayload = true;
+            }
+        }
+    }
+    
+    $columnName = ($hasSubmissionData && !$hasPayload) ? 'submission_data' : 'payload';
+    $pf = $conn->prepare("SELECT {$columnName} FROM grossmotor_submissions WHERE student_id=? ORDER BY created_at DESC LIMIT 1");
     if ($pf) {
         $pf->bind_param('i', $studentId);
         if ($pf->execute()) {
             $res = $pf->get_result();
             if ($res && ($row = $res->fetch_assoc())) {
-                $arr = json_decode($row['payload'] ?? '[]', true);
+                $dataColumn = $hasSubmissionData && !$hasPayload ? 'submission_data' : 'payload';
+                $arr = json_decode($row[$dataColumn] ?? '[]', true);
                 if (is_array($arr)) {
                     foreach ($arr as $it) {
                         $label = isset($it['item']) ? (string)$it['item'] : '';
