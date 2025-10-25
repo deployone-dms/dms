@@ -975,21 +975,23 @@ if ($studentsTableExists) {
                                     ?>
                                     <img src="<?php echo $pic_src; ?>" class="avatar" alt="Student Photo">
                                 </td>
-                                <td><?php echo htmlspecialchars($row['last_name'] ?? ''); ?></td>
-                                <td><?php echo htmlspecialchars($row['first_name'] ?? ''); ?></td>
-                                <td><?php echo htmlspecialchars($row['middle_initial'] ?? ''); ?></td>
-                                <td><?php echo date('M d, Y', strtotime($row['birth_date'])); ?></td>
-                                <td><?php echo $row['age']; ?> years old</td>
+                                <td><?php echo htmlspecialchars($row['last_name'] ?? 'N/A'); ?></td>
+                                <td><?php echo htmlspecialchars($row['first_name'] ?? 'N/A'); ?></td>
+                                <td><?php echo htmlspecialchars($row['middle_initial'] ?? 'N/A'); ?></td>
+                                <td><?php echo isset($row['birth_date']) && $row['birth_date'] ? date('M d, Y', strtotime($row['birth_date'])) : 'N/A'; ?></td>
+                                <td><?php echo isset($row['age']) ? $row['age'] . ' years old' : 'N/A'; ?></td>
                                 <td>
                                     <span style="display: inline-flex; align-items: center; gap: 5px;">
                                         <?php 
-                                        $sex = $row['sex'] ?? $row['gender'] ?? 'Unknown';
+                                        $sex = isset($row['sex']) ? $row['sex'] : (isset($row['gender']) ? $row['gender'] : 'Unknown');
                                         if($sex == 'Male'): ?>
                                             <i class="fas fa-male" style="color: #007BFF;"></i>
-                                        <?php else: ?>
+                                        <?php elseif($sex == 'Female'): ?>
                                             <i class="fas fa-female" style="color: #E83E8C;"></i>
+                                        <?php else: ?>
+                                            <i class="fas fa-question" style="color: #6C757D;"></i>
                                         <?php endif; ?>
-                                        <?php echo $sex; ?>
+                                        <?php echo htmlspecialchars($sex); ?>
                                     </span>
                                 </td>
                                 
@@ -1331,8 +1333,15 @@ if ($studentsTableExists) {
                 });
 
                 // Format sex with icon
-                const sex = btn.dataset.sex;
-                const sexIcon = sex === 'Male' ? '<i class="fas fa-male" style="color: #007BFF;"></i>' : '<i class="fas fa-female" style="color: #E83E8C;"></i>';
+                const sex = btn.dataset.sex || 'Unknown';
+                let sexIcon;
+                if (sex === 'Male') {
+                    sexIcon = '<i class="fas fa-male" style="color: #007BFF;"></i>';
+                } else if (sex === 'Female') {
+                    sexIcon = '<i class="fas fa-female" style="color: #E83E8C;"></i>';
+                } else {
+                    sexIcon = '<i class="fas fa-question" style="color: #6C757D;"></i>';
+                }
 
                 // Populate modal
                 document.getElementById('last_name').textContent = btn.dataset.last || 'N/A';

@@ -27,6 +27,10 @@ if ($statusCheck->num_rows == 0) {
     $conn->query("ALTER TABLE students ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'PENDING'");
 }
 $result = $conn->query("SELECT * FROM students WHERE status='ACCEPTED' ORDER BY id DESC");
+if (!$result) {
+    error_log("Database query error: " . $conn->error);
+    $result = false;
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -145,21 +149,25 @@ $result = $conn->query("SELECT * FROM students WHERE status='ACCEPTED' ORDER BY 
                                 <?php while($row = $result->fetch_assoc()): ?>
                                 <tr>
                                     <td class="avatar-cell">
-                                        <?php $pic_src = $row['picture'] ? $row['picture'] : 'yakaplogopo.jpg'; ?>
+                                        <?php $pic_src = isset($row['picture']) && $row['picture'] ? $row['picture'] : 'yakaplogopo.jpg'; ?>
                                         <img src="<?php echo $pic_src; ?>" class="avatar" alt="Student Photo">
                                     </td>
-                                    <td><?php echo htmlspecialchars($row['last_name']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['first_name']); ?></td>
-                                    <td><?php echo date('M d, Y', strtotime($row['birth_date'])); ?></td>
-                                    <td><?php echo (int)$row['age']; ?> years old</td>
+                                    <td><?php echo htmlspecialchars($row['last_name'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($row['first_name'] ?? 'N/A'); ?></td>
+                                    <td><?php echo isset($row['birth_date']) && $row['birth_date'] ? date('M d, Y', strtotime($row['birth_date'])) : 'N/A'; ?></td>
+                                    <td><?php echo isset($row['age']) ? (int)$row['age'] . ' years old' : 'N/A'; ?></td>
                                     <td>
                                         <span style="display: inline-flex; align-items: center; gap: 5px;">
-                                            <?php if($row['sex'] == 'Male'): ?>
+                                            <?php 
+                                            $sex = isset($row['sex']) ? $row['sex'] : (isset($row['gender']) ? $row['gender'] : 'Unknown');
+                                            if($sex == 'Male'): ?>
                                                 <i class="fas fa-male" style="color: #007BFF;"></i>
-                                            <?php else: ?>
+                                            <?php elseif($sex == 'Female'): ?>
                                                 <i class="fas fa-female" style="color: #E83E8C;"></i>
+                                            <?php else: ?>
+                                                <i class="fas fa-question" style="color: #6C757D;"></i>
                                             <?php endif; ?>
-                                            <?php echo htmlspecialchars($row['sex']); ?>
+                                            <?php echo htmlspecialchars($sex); ?>
                                         </span>
                                     </td>
                                 </tr>
