@@ -410,7 +410,7 @@ function build_report_card(mysqli $conn, int $student_id, array $catalog): array
                         <div>
                             <div style="font-weight:700; color:#1B5E20;">Latest Gross Motor</div>
                             <?php if ($summary): ?>
-                            <div style="color:#555; font-size:14px;">Date: <?php echo date('M d, Y', strtotime($summary['created_at'])); ?></div>
+                            <div style="color:#555; font-size:14px;">Date: <?php echo isset($summary['created_at']) && $summary['created_at'] ? date('M d, Y', strtotime($summary['created_at'])) : 'No date available'; ?></div>
                             <table style="margin-top:8px;">
                                 <tr><th>Eval1</th><th>Eval2</th><th>Eval3</th></tr>
                                 <tr><td><?php echo intval($summary['totals']['t1']); ?></td><td><?php echo intval($summary['totals']['t2']); ?></td><td><?php echo intval($summary['totals']['t3']); ?></td></tr>
@@ -456,7 +456,7 @@ function build_report_card(mysqli $conn, int $student_id, array $catalog): array
                         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
                             <?php foreach ($attendance['rows'] as $ar): $isPresent = strtolower($ar['status']) === 'present'; ?>
                             <div style="border:1px solid #E9ECEF; border-radius:12px; padding:12px; background:#FAFAFA; display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                                <div style="font-weight:600; color:#1B5E20;">&nbsp;<?php echo date('M d, Y', strtotime($ar['attendance_date'])); ?></div>
+                                <div style="font-weight:600; color:#1B5E20;">&nbsp;<?php echo isset($ar['attendance_date']) && $ar['attendance_date'] ? date('M d, Y', strtotime($ar['attendance_date'])) : 'No date'; ?></div>
                                 <span style="background:<?php echo $isPresent?'#E6FFED':'#FFF0F0'; ?>; color:<?php echo $isPresent?'#1E7E34':'#B02A37'; ?>; border:1px solid <?php echo $isPresent?'#C3E6CB':'#F5C2C7'; ?>; padding:6px 10px; border-radius:999px; font-weight:600; width:100px; text-align:center;">
                                     <?php echo htmlspecialchars(ucfirst($ar['status'])); ?>
                                 </span>
